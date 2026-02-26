@@ -2,4 +2,4 @@ module github.com/tinywasm/orm
 
 go 1.25.2
 
-require github.com/tinywasm/fmt v0.18.5 // indirect
+require github.com/tinywasm/fmt v0.18.5
