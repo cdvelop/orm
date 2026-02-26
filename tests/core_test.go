@@ -109,6 +109,18 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
+	// Test ReadOne Validation Error
+	t.Run("ReadOne Validation Error", func(t *testing.T) {
+		mockAdapter := &MockAdapter{}
+		db := orm.New(mockAdapter)
+		model := &MockModel{Table: ""} // Empty table
+
+		err := db.Query(model).ReadOne()
+		if !errors.Is(err, orm.ErrEmptyTable) {
+			t.Errorf("Expected ErrEmptyTable, got %v", err)
+		}
+	})
+
 	// 5. Test ReadAll
 	t.Run("ReadAll", func(t *testing.T) {
 		mockAdapter := &MockAdapter{}
@@ -135,8 +147,20 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 6. Test Validation Error
-	t.Run("Validation Error", func(t *testing.T) {
+	// Test ReadAll Validation Error
+	t.Run("ReadAll Validation Error", func(t *testing.T) {
+		mockAdapter := &MockAdapter{}
+		db := orm.New(mockAdapter)
+		model := &MockModel{Table: ""} // Empty table
+
+		err := db.Query(model).ReadAll(nil, nil)
+		if !errors.Is(err, orm.ErrEmptyTable) {
+			t.Errorf("Expected ErrEmptyTable, got %v", err)
+		}
+	})
+
+	// 6. Test Validation Error (Create)
+	t.Run("Validation Error Create", func(t *testing.T) {
 		db := orm.New(&MockAdapter{})
 		model := &MockModel{
 			Table: "users",
@@ -152,7 +176,35 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 7. Test Empty Table Error
+	// 7. Test Validation Error (Update)
+	t.Run("Validation Error Update", func(t *testing.T) {
+		db := orm.New(&MockAdapter{})
+		model := &MockModel{
+			Table: "users",
+			Cols:  []string{"col1"},
+			Vals:  []any{1, 2}, // Mismatch
+		}
+
+		err := db.Update(model)
+		if err == nil {
+			t.Error("Expected error, got nil")
+		} else if !strings.Contains(err.Error(), orm.ErrValidation.Error()) {
+			t.Errorf("Expected error containing '%s', got '%v'", orm.ErrValidation.Error(), err)
+		}
+	})
+
+	// Test Validation Error (Delete)
+	t.Run("Validation Error Delete", func(t *testing.T) {
+		db := orm.New(&MockAdapter{})
+		model := &MockModel{Table: ""} // Empty table
+
+		err := db.Delete(model)
+		if !errors.Is(err, orm.ErrEmptyTable) {
+			t.Errorf("Expected ErrEmptyTable, got %v", err)
+		}
+	})
+
+	// 8. Test Empty Table Error
 	t.Run("Empty Table Error", func(t *testing.T) {
 		db := orm.New(&MockAdapter{})
 		model := &MockModel{Table: ""}
@@ -163,7 +215,7 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 8. Test Or Condition
+	// 9. Test Or Condition
 	t.Run("Or Condition", func(t *testing.T) {
 		c := orm.Eq("a", 1)
 		orC := orm.Or(c)
@@ -173,7 +225,7 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 9. Test Transaction Support
+	// 10. Test Transaction Support
 	t.Run("Transaction", func(t *testing.T) {
 		mockTxBound := &MockTxBound{}
 		mockTxAdapter := &MockTxAdapter{Bound: mockTxBound}
@@ -196,7 +248,7 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 10. Test Transaction Rollback
+	// 11. Test Transaction Rollback
 	t.Run("Transaction Rollback", func(t *testing.T) {
 		mockTxBound := &MockTxBound{}
 		mockTxAdapter := &MockTxAdapter{Bound: mockTxBound}
@@ -219,12 +271,122 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 11. Test No Transaction Support
+	// Test Transaction Begin Error
+	t.Run("Transaction Begin Error", func(t *testing.T) {
+		mockTxAdapter := &MockTxAdapter{BeginTxErr: errors.New("begin error")}
+		db := orm.New(mockTxAdapter)
+
+		err := db.Tx(func(tx *orm.DB) error {
+			return nil
+		})
+
+		if err == nil || err.Error() != "begin error" {
+			t.Errorf("Expected 'begin error', got %v", err)
+		}
+	})
+
+	// 12. Test No Transaction Support
 	t.Run("No Tx Support", func(t *testing.T) {
 		db := orm.New(&MockAdapter{}) // Not a TxAdapter
 		err := db.Tx(func(tx *orm.DB) error { return nil })
 		if !errors.Is(err, orm.ErrNoTxSupport) {
 			t.Errorf("Expected ErrNoTxSupport, got %v", err)
+		}
+	})
+
+	// 13. Test Condition Helpers
+	t.Run("Condition Helpers", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			cond     orm.Condition
+			expected string
+			val      any
+		}{
+			{"Neq", orm.Neq("a", 1), "!=", 1},
+			{"Gte", orm.Gte("b", 2), ">=", 2},
+			{"Lt", orm.Lt("c", 3), "<", 3},
+			{"Lte", orm.Lte("d", 4), "<=", 4},
+			{"Like", orm.Like("e", "%test%"), "LIKE", "%test%"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.cond.Operator() != tc.expected {
+					t.Errorf("Expected operator %s, got %s", tc.expected, tc.cond.Operator())
+				}
+				if tc.cond.Value() != tc.val {
+					t.Errorf("Expected value %v, got %v", tc.val, tc.cond.Value())
+				}
+				if tc.cond.Logic() != "AND" {
+					t.Errorf("Expected default logic AND, got %s", tc.cond.Logic())
+				}
+			})
+		}
+	})
+
+	// 14. Test Condition and Order Getters
+	t.Run("Getters", func(t *testing.T) {
+		// Condition Getters
+		c := orm.Eq("field", "val")
+		if c.Field() != "field" {
+			t.Errorf("Expected Field 'field', got '%s'", c.Field())
+		}
+		if c.Operator() != "=" {
+			t.Errorf("Expected Operator '=', got '%s'", c.Operator())
+		}
+		if c.Value() != "val" {
+			t.Errorf("Expected Value 'val', got '%v'", c.Value())
+		}
+		if c.Logic() != "AND" {
+			t.Errorf("Expected Logic 'AND', got '%s'", c.Logic())
+		}
+
+		// Order Getters (using MockAdapter to capture Order object since we can't construct it directly)
+		mockAdapter := &MockAdapter{}
+		db := orm.New(mockAdapter)
+		model := &MockModel{Table: "users"}
+
+		db.Query(model).OrderBy("col", "ASC").ReadOne()
+
+		if len(mockAdapter.LastQuery.OrderBy) != 1 {
+			t.Fatalf("Expected 1 OrderBy, got %d", len(mockAdapter.LastQuery.OrderBy))
+		}
+		o := mockAdapter.LastQuery.OrderBy[0]
+
+		if o.Column() != "col" {
+			t.Errorf("Expected Column 'col', got '%s'", o.Column())
+		}
+		if o.Dir() != "ASC" {
+			t.Errorf("Expected Dir 'ASC', got '%s'", o.Dir())
+		}
+	})
+
+	// 15. Test Builder Chain (Offset, GroupBy, Limit)
+	t.Run("Builder Chain", func(t *testing.T) {
+		mockAdapter := &MockAdapter{}
+		db := orm.New(mockAdapter)
+		model := &MockModel{Table: "users"}
+
+		// Test Offset and GroupBy
+		db.Query(model).
+			Offset(10).
+			GroupBy("a", "b").
+			ReadOne()
+
+		if mockAdapter.LastQuery.Offset != 10 {
+			t.Errorf("Expected Offset 10, got %d", mockAdapter.LastQuery.Offset)
+		}
+		if len(mockAdapter.LastQuery.GroupBy) != 2 {
+			t.Errorf("Expected 2 GroupBy cols, got %d", len(mockAdapter.LastQuery.GroupBy))
+		}
+
+		// Test Limit with ReadAll
+		db.Query(model).
+			Limit(5).
+			ReadAll(nil, nil)
+
+		if mockAdapter.LastQuery.Limit != 5 {
+			t.Errorf("Expected Limit 5, got %d", mockAdapter.LastQuery.Limit)
 		}
 	})
 }
