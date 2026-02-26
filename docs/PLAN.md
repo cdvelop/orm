@@ -1,4 +1,4 @@
-# ORM Implementation Plan
+# ORM Implementation
 
 This document is the **Master Prompt (PLAN.md)** for the initial creation of the `tinywasm/orm` ecosystem. Every execution agent must follow this plan sequentially.
 The architecture is governed by the strict **Interface over Reflection** pattern to ensure the highest speed in WebAssembly.
