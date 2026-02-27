@@ -58,12 +58,6 @@ type Model interface {
 	Pointers() []any
 }
 
-// Adapter represents a database adapter.
-// Consumers inject this interface.
-type Adapter interface {
-	Execute(q Query, m Model, factory func() Model, each func(Model)) error
-}
-
 // DB represents a database connection.
 // Consumers instantiate it via New().
 type DB struct {
@@ -86,7 +80,7 @@ func (db *DB) Create(m Model) error {
 		Columns: m.Columns(),
 		Values:  m.Values(),
 	}
-	return db.adapter.Execute(q, m, nil, nil)
+	return db.adapter.Exec(q)
 }
 
 // Update updates a model in the database.
@@ -101,7 +95,7 @@ func (db *DB) Update(m Model, conds ...Condition) error {
 		Values:     m.Values(),
 		Conditions: conds,
 	}
-	return db.adapter.Execute(q, m, nil, nil)
+	return db.adapter.Exec(q)
 }
 
 // Delete deletes a model from the database.
@@ -114,13 +108,12 @@ func (db *DB) Delete(m Model, conds ...Condition) error {
 		Table:      m.TableName(),
 		Conditions: conds,
 	}
-	return db.adapter.Execute(q, m, nil, nil)
+	return db.adapter.Exec(q)
 }
 
 // QB represents a query builder.
 // Consumers hold a *QB reference in variables for incremental building.
 type QB struct {
-	db      *DB
 	model   Model
 	conds   []Condition
 	orderBy []Order
@@ -132,7 +125,6 @@ type QB struct {
 // Query creates a new QB instance.
 func (db *DB) Query(m Model) *QB {
 	return &QB{
-		db:    db,
 		model: m,
 	}
 }
@@ -167,30 +159,9 @@ func (qb *QB) GroupBy(columns ...string) *QB {
 	return qb
 }
 
-// ReadOne executes the query and returns a single result.
-func (qb *QB) ReadOne() error {
-	if err := validate(ActionReadOne, qb.model); err != nil {
-		return err
-	}
-	q := Query{
-		Action:     ActionReadOne,
-		Table:      qb.model.TableName(),
-		Conditions: qb.conds,
-		OrderBy:    qb.orderBy,
-		GroupBy:    qb.groupBy,
-		Limit:      1, // Force limit 1
-		Offset:     qb.offset,
-	}
-	return qb.db.adapter.Execute(q, qb.model, nil, nil)
-}
-
-// ReadAll executes the query and returns all results.
-func (qb *QB) ReadAll(factory func() Model, each func(Model)) error {
-	if err := validate(ActionReadAll, qb.model); err != nil {
-		return err
-	}
-	q := Query{
-		Action:     ActionReadAll,
+// ToQuery returns the constructed Query object.
+func (qb *QB) ToQuery() Query {
+	return Query{
 		Table:      qb.model.TableName(),
 		Conditions: qb.conds,
 		OrderBy:    qb.orderBy,
@@ -198,5 +169,4 @@ func (qb *QB) ReadAll(factory func() Model, each func(Model)) error {
 		Limit:      qb.limit,
 		Offset:     qb.offset,
 	}
-	return qb.db.adapter.Execute(q, nil, factory, each)
 }
