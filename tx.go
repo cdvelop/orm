@@ -1,31 +1,34 @@
 package orm
 
-// TxBound represents a transaction bound to an adapter.
-type TxBound interface {
-	Adapter
+// TxBoundExecutor represents an executor bound to a transaction.
+type TxBoundExecutor interface {
+	Executor
 	Commit() error
 	Rollback() error
 }
 
-// TxAdapter represents an adapter that supports transactions.
-type TxAdapter interface {
-	Adapter
-	BeginTx() (TxBound, error)
+// TxExecutor represents an executor that supports transactions.
+type TxExecutor interface {
+	Executor
+	BeginTx() (TxBoundExecutor, error)
 }
 
 // Tx executes a function within a transaction.
 func (db *DB) Tx(fn func(tx *DB) error) error {
-	txAdapter, ok := db.adapter.(TxAdapter)
+	txExec, ok := db.exec.(TxExecutor)
 	if !ok {
 		return ErrNoTxSupport
 	}
 
-	bound, err := txAdapter.BeginTx()
+	bound, err := txExec.BeginTx()
 	if err != nil {
 		return err
 	}
 
-	txDB := &DB{adapter: bound}
+	txDB := &DB{
+		exec:    bound,
+		planner: db.planner,
+	}
 
 	if err := fn(txDB); err != nil {
 		bound.Rollback()

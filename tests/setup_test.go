@@ -4,21 +4,91 @@ import (
 	"github.com/tinywasm/orm"
 )
 
-// MockAdapter is a mock implementation of the Adapter interface.
-type MockAdapter struct {
-	LastQuery orm.Query
-	LastModel orm.Model
-	LastFactory func() orm.Model
-	LastEach    func(orm.Model)
-	ReturnErr   error
+// MockPlanner captures the query and returns a predefined plan.
+type MockPlanner struct {
+	LastQuery  orm.Query
+	LastModel  orm.Model
+	ReturnPlan orm.Plan
+	ReturnErr  error
 }
 
-func (m *MockAdapter) Execute(q orm.Query, model orm.Model, factory func() orm.Model, each func(orm.Model)) error {
+func (m *MockPlanner) Plan(q orm.Query, model orm.Model) (orm.Plan, error) {
 	m.LastQuery = q
 	m.LastModel = model
-	m.LastFactory = factory
-	m.LastEach = each
-	return m.ReturnErr
+	if m.ReturnPlan.Query == "" {
+		m.ReturnPlan.Query = "MOCK_QUERY"
+	}
+	return m.ReturnPlan, m.ReturnErr
+}
+
+// MockExecutor captures execution calls.
+type MockExecutor struct {
+	ExecutedQueries []string
+	ExecutedArgs    [][]any
+	ReturnExecErr   error
+	ReturnQueryRow  orm.Scanner
+	ReturnQueryRows orm.Rows
+	ReturnQueryErr  error
+}
+
+func (m *MockExecutor) Exec(query string, args ...any) error {
+	m.ExecutedQueries = append(m.ExecutedQueries, query)
+	m.ExecutedArgs = append(m.ExecutedArgs, args)
+	return m.ReturnExecErr
+}
+
+func (m *MockExecutor) QueryRow(query string, args ...any) orm.Scanner {
+	m.ExecutedQueries = append(m.ExecutedQueries, query)
+	m.ExecutedArgs = append(m.ExecutedArgs, args)
+	if m.ReturnQueryRow == nil {
+		return &MockScanner{}
+	}
+	return m.ReturnQueryRow
+}
+
+func (m *MockExecutor) Query(query string, args ...any) (orm.Rows, error) {
+	m.ExecutedQueries = append(m.ExecutedQueries, query)
+	m.ExecutedArgs = append(m.ExecutedArgs, args)
+	if m.ReturnQueryRows == nil {
+		return &MockRows{}, m.ReturnQueryErr
+	}
+	return m.ReturnQueryRows, m.ReturnQueryErr
+}
+
+type MockScanner struct {
+	ScanErr error
+}
+
+func (m *MockScanner) Scan(dest ...any) error {
+	return m.ScanErr
+}
+
+type MockRows struct {
+	Count    int
+	Current  int
+	ScanErr  error
+	CloseErr error
+	ErrVal   error
+}
+
+func (m *MockRows) Next() bool {
+	if m.Current < m.Count {
+		m.Current++
+		return true
+	}
+	return false
+}
+
+func (m *MockRows) Scan(dest ...any) error {
+	return m.ScanErr
+}
+
+func (m *MockRows) Close() error {
+	return m.CloseErr
+}
+
+func (m *MockRows) Err() error {
+	return m.ErrVal
 }
 
 // MockModel is a mock implementation of the Model interface.
@@ -33,38 +103,37 @@ func (m MockModel) Columns() []string { return m.Cols }
 func (m MockModel) Values() []any     { return m.Vals }
 func (m MockModel) Pointers() []any   { return nil }
 
-// MockTxBound is a mock implementation of the TxBound interface.
-type MockTxBound struct {
-	MockAdapter
+// MockTxExecutor ...
+type MockTxExecutor struct {
+	MockExecutor
+	Bound      *MockTxBoundExecutor
+	BeginTxErr error
+}
+
+func (m *MockTxExecutor) BeginTx() (orm.TxBoundExecutor, error) {
+	if m.BeginTxErr != nil {
+		return nil, m.BeginTxErr
+	}
+	if m.Bound == nil {
+		m.Bound = &MockTxBoundExecutor{}
+	}
+	return m.Bound, nil
+}
+
+type MockTxBoundExecutor struct {
+	MockExecutor
 	CommitCalled   bool
 	RollbackCalled bool
 	CommitErr      error
 	RollbackErr    error
 }
 
-func (m *MockTxBound) Commit() error {
+func (m *MockTxBoundExecutor) Commit() error {
 	m.CommitCalled = true
 	return m.CommitErr
 }
 
-func (m *MockTxBound) Rollback() error {
+func (m *MockTxBoundExecutor) Rollback() error {
 	m.RollbackCalled = true
 	return m.RollbackErr
-}
-
-// MockTxAdapter is a mock implementation of the TxAdapter interface.
-type MockTxAdapter struct {
-	MockAdapter
-	Bound *MockTxBound
-	BeginTxErr error
-}
-
-func (m *MockTxAdapter) BeginTx() (orm.TxBound, error) {
-	if m.BeginTxErr != nil {
-		return nil, m.BeginTxErr
-	}
-	if m.Bound == nil {
-		m.Bound = &MockTxBound{}
-	}
-	return m.Bound, nil
 }

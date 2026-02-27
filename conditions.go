@@ -1,5 +1,19 @@
 package orm
 
+// Condition represents a filter for a query.
+// It is a sealed value type constructed via helper functions.
+type Condition struct {
+	field    string
+	operator string
+	value    any
+	logic    string
+}
+
+func (c Condition) Field() string    { return c.field }
+func (c Condition) Operator() string { return c.operator }
+func (c Condition) Value() any       { return c.value }
+func (c Condition) Logic() string    { return c.logic }
+
 // Eq creates a condition for checking equality.
 func Eq(field string, value any) Condition {
 	return Condition{

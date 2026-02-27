@@ -11,5 +11,5 @@ var ErrValidation = fmt.Err("error", "validation")
 // ErrEmptyTable is returned when TableName() returns an empty string.
 var ErrEmptyTable = fmt.Err("name", "table", "empty")
 
-// ErrNoTxSupport is returned by DB.Tx() when the adapter does not implement TxAdapter.
+// ErrNoTxSupport is returned by DB.Tx() when the executor does not implement TxExecutor.
 var ErrNoTxSupport = fmt.Err("transaction", "not", "supported")
