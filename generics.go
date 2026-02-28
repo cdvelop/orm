@@ -1,8 +1,10 @@
 package orm
 
-// Get executes the query and returns a single result of type P (pointer to T).
-// It expects T to be the struct type and P to be the pointer type that implements Model.
-func Get[T any, P interface{*T; Model}](db *DB, qb *QB) (P, error) {
+import "github.com/tinywasm/fmt"
+
+// Get executes the query and returns a single result of type *T.
+// T must be a struct type such that *T implements the Model interface.
+func Get[T any](db *DB, qb *QB) (*T, error) {
 	if err := validate(ActionReadOne, qb.model); err != nil {
 		return nil, err
 	}
@@ -11,21 +13,23 @@ func Get[T any, P interface{*T; Model}](db *DB, qb *QB) (P, error) {
 	q.Action = ActionReadOne
 	q.Limit = 1
 
-	// Instantiate T. new(T) returns *T.
-	// Cast to P to satisfy the return type and access Model methods.
-	dest := P(new(T))
+	dest := new(T)
+	m, ok := any(dest).(Model)
+	if !ok {
+		return nil, fmt.Err("model", "interface", "not", "implemented")
+	}
 
 	scanner := db.adapter.QueryRow(q)
-	if err := scanner.Scan(dest.Pointers()...); err != nil {
+	if err := scanner.Scan(m.Pointers()...); err != nil {
 		return nil, err
 	}
 
 	return dest, nil
 }
 
-// FindAll executes the query and returns a slice of results of type P (pointer to T).
-// It expects T to be the struct type and P to be the pointer type that implements Model.
-func FindAll[T any, P interface{*T; Model}](db *DB, qb *QB) ([]P, error) {
+// FindAll executes the query and returns a slice of results of type *T.
+// T must be a struct type such that *T implements the Model interface.
+func FindAll[T any](db *DB, qb *QB) ([]*T, error) {
 	if err := validate(ActionReadAll, qb.model); err != nil {
 		return nil, err
 	}
@@ -39,10 +43,16 @@ func FindAll[T any, P interface{*T; Model}](db *DB, qb *QB) ([]P, error) {
 	}
 	defer rows.Close()
 
-	var results []P
+	// Fast-fail check before iterating
+	if _, ok := any(new(T)).(Model); !ok {
+		return nil, fmt.Err("model", "interface", "not", "implemented")
+	}
+
+	var results []*T
 	for rows.Next() {
-		dest := P(new(T))
-		if err := rows.Scan(dest.Pointers()...); err != nil {
+		dest := new(T)
+		m := any(dest).(Model) // Safe because we checked above
+		if err := rows.Scan(m.Pointers()...); err != nil {
 			return nil, err
 		}
 		results = append(results, dest)

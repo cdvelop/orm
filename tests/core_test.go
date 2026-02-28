@@ -181,6 +181,17 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
+	// Test Empty Table Error (Create)
+	t.Run("Empty Table Error", func(t *testing.T) {
+		db := orm.New(&MockAdapter{})
+		model := &MockModel{Table: ""}
+
+		err := db.Create(model)
+		if !errors.Is(err, orm.ErrEmptyTable) {
+			t.Errorf("Expected ErrEmptyTable, got %v", err)
+		}
+	})
+
 	// 6. Test Validation Error (Create)
 	t.Run("Validation Error Create", func(t *testing.T) {
 		db := orm.New(&MockAdapter{})
