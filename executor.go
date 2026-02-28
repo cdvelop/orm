@@ -6,6 +6,7 @@ type Executor interface {
 	Exec(query string, args ...any) error
 	QueryRow(query string, args ...any) Scanner
 	Query(query string, args ...any) (Rows, error)
+	Close() error
 }
 
 // Scanner represents a single row scanner.

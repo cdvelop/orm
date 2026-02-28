@@ -485,4 +485,21 @@ func RunCoreTests(t *testing.T) {
 			t.Errorf("Expected rows err, got %v", err)
 		}
 	})
+
+	// 17. Test Close and RawExecutor
+	t.Run("Close and RawExecutor", func(t *testing.T) {
+		mockExec := &MockExecutor{ReturnCloseErr: errors.New("close err")}
+		db := orm.New(mockExec, &MockCompiler{})
+
+		// Test RawExecutor
+		if db.RawExecutor() != mockExec {
+			t.Errorf("Expected RawExecutor to return the provided executor")
+		}
+
+		// Test Close
+		err := db.Close()
+		if err == nil || err.Error() != "close err" {
+			t.Errorf("Expected close err, got %v", err)
+		}
+	})
 }

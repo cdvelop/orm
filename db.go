@@ -76,3 +76,13 @@ func (db *DB) Query(m Model) *QB {
 		model: m,
 	}
 }
+
+// Close closes the underlying executor if it supports it.
+func (db *DB) Close() error {
+	return db.exec.Close()
+}
+
+// RawExecutor returns the underlying executor instance.
+func (db *DB) RawExecutor() Executor {
+	return db.exec
+}

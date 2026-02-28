@@ -12,7 +12,7 @@ go install github.com/tinywasm/orm/cmd/ormc@latest
 ### Interfaces
 - `Model`: `TableName()`, `Columns()`, `Values()`, `Pointers()` *(auto-implemented by `ormc`)*
 - `Compiler`: `Compile(Query, Model) (Plan, error)`
-- `Executor`: `Exec()`, `QueryRow()`, `Query()`
+- `Executor`: `Exec()`, `QueryRow()`, `Query()`, `Close()`
 - `TxExecutor`: `BeginTx()`
 - `TxBoundExecutor`: Embeds `Executor`, `Commit()`, `Rollback()`
 
@@ -35,7 +35,7 @@ For a `struct User`, the `ormc` compiler generates:
 - `ReadAllUser(qb *orm.QB) ([]*User, error)`
 
 ### Core Structs
-- `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`
+- `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`, `Close`, `RawExecutor`
 - `QB` (Fluent API): `Where("col")`, `Limit(n)`, `Offset(n)`, `OrderBy("col")`, `GroupBy("cols...")`
 - `Clause` (Chainable): `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`
 - `OrderClause` (Chainable): `.Asc()`, `.Desc()`

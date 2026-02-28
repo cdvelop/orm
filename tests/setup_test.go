@@ -29,6 +29,7 @@ type MockExecutor struct {
 	ReturnQueryRow  orm.Scanner
 	ReturnQueryRows orm.Rows
 	ReturnQueryErr  error
+	ReturnCloseErr  error
 }
 
 func (m *MockExecutor) Exec(query string, args ...any) error {
@@ -53,6 +54,10 @@ func (m *MockExecutor) Query(query string, args ...any) (orm.Rows, error) {
 		return &MockRows{}, m.ReturnQueryErr
 	}
 	return m.ReturnQueryRows, m.ReturnQueryErr
+}
+
+func (m *MockExecutor) Close() error {
+	return m.ReturnCloseErr
 }
 
 type MockScanner struct {
