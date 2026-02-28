@@ -4,15 +4,15 @@ import (
 	"github.com/tinywasm/orm"
 )
 
-// MockPlanner captures the query and returns a predefined plan.
-type MockPlanner struct {
+// MockCompiler captures the query and returns a predefined plan.
+type MockCompiler struct {
 	LastQuery  orm.Query
 	LastModel  orm.Model
 	ReturnPlan orm.Plan
 	ReturnErr  error
 }
 
-func (m *MockPlanner) Plan(q orm.Query, model orm.Model) (orm.Plan, error) {
+func (m *MockCompiler) Compile(q orm.Query, model orm.Model) (orm.Plan, error) {
 	m.LastQuery = q
 	m.LastModel = model
 	if m.ReturnPlan.Query == "" {
