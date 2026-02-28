@@ -9,14 +9,14 @@
 ## Overview
 This plan outlines the steps to significantly improve the Developer Experience (DX) of `tinywasm/orm` by introducing code generation and adapting the public API without compromising the core architecture's performance and WASM compatibility constraints. 
 
-Generics and `reflect` are strictly excluded from this solution. Instead, developer ergonomics are achieved via explicit code generation (`cmd/ormgen/main.go`).
+Generics and `reflect` are strictly excluded from this solution. Instead, developer ergonomics are achieved via explicit code generation (`cmd/ormc/main.go`).
 
 ## Execution Steps
 
 The improvements are separated into 4 independent steps. Each step has its own detailed plan document:
 
 1. **Step 1: Code Generator for Boilerplate Elimination**
-   - Goal: Create `cmd/ormgen/main.go` to automatically implement the `Model` interface (`Values()`, `Pointers()`, `Columns()`).
+   - Goal: Create `cmd/ormc/main.go` to automatically implement the `Model` interface (`Values()`, `Pointers()`, `Columns()`).
    - Rule: No struct tags. Use `tinywasm/fmt` to convert Go struct field names naturally into `snake_case` column names.
    - Document: [PLAN_GENERATOR.md](PLAN_GENERATOR.md)
 

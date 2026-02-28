@@ -98,8 +98,8 @@ func RunCoreTests(t *testing.T) {
 		mockExec.ReturnQueryRow = &MockScanner{}
 
 		err := db.Query(model).
-			Where(orm.Eq("id", 1)).
-			OrderBy("created_at", "DESC").
+			Where("id").Eq(1).
+			OrderBy("created_at").Desc().
 			ReadOne()
 
 		if err != nil {
@@ -372,7 +372,7 @@ func RunCoreTests(t *testing.T) {
 		model := &MockModel{Table: "users"}
 		mockExec.ReturnQueryRow = &MockScanner{}
 
-		db.Query(model).OrderBy("col", "ASC").ReadOne()
+		db.Query(model).OrderBy("col").Asc().ReadOne()
 
 		if len(mockCompiler.LastQuery.OrderBy) != 1 {
 			t.Fatalf("Expected 1 OrderBy, got %d", len(mockCompiler.LastQuery.OrderBy))
