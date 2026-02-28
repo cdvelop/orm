@@ -56,7 +56,7 @@ func (qb *QB) ReadOne() error {
 		Limit:      1, // Force limit 1
 		Offset:     qb.offset,
 	}
-	plan, err := qb.db.planner.Plan(q, qb.model)
+	plan, err := qb.db.compiler.Compile(q, qb.model)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (qb *QB) ReadOne() error {
 }
 
 // ReadAll executes the query and returns all results.
-func (qb *QB) ReadAll(factory func() Model, each func(Model)) error {
+func (qb *QB) ReadAll(new func() Model, onRow func(Model)) error {
 	if err := validate(ActionReadAll, qb.model); err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (qb *QB) ReadAll(factory func() Model, each func(Model)) error {
 		Limit:      qb.limit,
 		Offset:     qb.offset,
 	}
-	plan, err := qb.db.planner.Plan(q, qb.model)
+	plan, err := qb.db.compiler.Compile(q, qb.model)
 	if err != nil {
 		return err
 	}
@@ -94,11 +94,11 @@ func (qb *QB) ReadAll(factory func() Model, each func(Model)) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		m := factory()
+		m := new()
 		if err := rows.Scan(m.Pointers()...); err != nil {
 			return err
 		}
-		each(m)
+		onRow(m)
 	}
 	return rows.Err()
 }

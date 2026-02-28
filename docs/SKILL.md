@@ -4,15 +4,17 @@
 
 ### Interfaces
 - `Model`: `TableName()`, `Columns()`, `Values()`, `Pointers()`
-- `Adapter`: `Execute(Query, Model, factory, each)`
-- `TxAdapter`: `BeginTx()`
-- `TxBound`: Embeds `Adapter`, `Commit()`, `Rollback()`
+- `Compiler`: `Compile(Query, Model) (Plan, error)`
+- `Executor`: `Exec()`, `QueryRow()`, `Query()`
+- `TxExecutor`: `BeginTx()`
+- `TxBoundExecutor`: Embeds `Executor`, `Commit()`, `Rollback()`
 
 ### Structs
-- `DB`: `New(Adapter)`, `Create`, `Update`, `Delete`, `Query`, `Tx`
+- `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`
 - `QB`: `Where`, `Limit`, `Offset`, `OrderBy`, `GroupBy`, `ReadOne`, `ReadAll`
 - `Condition`: Helpers `Eq`, `Neq`, `Gt`, `Gte`, `Lt`, `Lte`, `Like`, `Or`
 - `Order`: `Column()`, `Dir()`
+- `Plan`: `Mode`, `Query`, `Args`
 
 ### Constants
 - `Action`: `Create`, `ReadOne`, `Update`, `Delete`, `ReadAll`
@@ -24,5 +26,5 @@ db.Query(m).
     Where(orm.Eq("age", 18), orm.Like("name", "A%")).
     OrderBy("created_at", "DESC").
     Limit(10).
-    ReadAll(factory, each)
+    ReadAll(newFunc, onRowFunc)
 ```

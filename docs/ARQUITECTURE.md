@@ -10,13 +10,15 @@ Unlike traditional ORMs (GORM, ObjectDB) that use `reflect` to infer tables and 
 2. **Reduced Binary Size:** Importing `reflect` inflates the WASM binary.
 3. **Strict Type Safety:** The compiler detects errors before runtime.
 
-The ORM acts as an agnostic orchestrator. It is unaware of whether the destination is Postgres, SQLite, or IndexedDB. It delegates the actual execution to an **Adapter** injected from `cmd/main.go`.
+The ORM acts as an agnostic orchestrator. It is unaware of whether the destination is Postgres, SQLite, or IndexedDB. It delegates the query translation to a **Compiler** and execution to an **Executor** injected from `cmd/main.go`.
 
 ---
 
 ## 2. Flowchart (The Lifecycle of a Query)
 
 [The Lifecycle of a Query: ORM_FLOW.md](diagrams/ORM_FLOW.md)
+
+`Model` → `Query` → `Compiler` → `Plan` → `Executor`
 
 ---
 
@@ -39,7 +41,7 @@ type Model interface {
 }
 ```
 
-> `Values()` and `Pointers()` are only called by the Adapter for the operations that require them. The Adapter must not call `Values()` on a DELETE, nor `Pointers()` on a CREATE.
+> `Values()` and `Pointers()` are only called by the Executor logic for the operations that require them.
 
 ---
 
@@ -63,7 +65,7 @@ Using a typed constant (not a raw string) ensures the compiler catches any inval
 
 #### `Condition` (Filter)
 
-A sealed value type. Consumers **must** construct via helpers (`Eq`, `Gt`, `Or`, etc.) — direct struct literal construction from outside the package is a compile error due to unexported fields. Adapters read values via getter methods.
+A sealed value type. Consumers **must** construct via helpers (`Eq`, `Gt`, `Or`, etc.) — direct struct literal construction from outside the package is a compile error due to unexported fields. Compilers read values via getter methods.
 
 ```go
 type Condition struct {
@@ -81,7 +83,7 @@ func (c Condition) Logic() string    { return c.logic }
 
 #### `Order` (Sorting)
 
-A sealed value type. Constructed **only** internally by `QB.OrderBy()` — never by consumers or adapters directly. Adapters read values via getter methods.
+A sealed value type. Constructed **only** internally by `QB.OrderBy()` — never by consumers or compilers directly. Compilers read values via getter methods.
 
 ```go
 type Order struct {
@@ -95,7 +97,7 @@ func (o Order) Dir() string    { return o.dir }
 
 #### `Query` (Agnostic Request)
 
-The central struct passed from the ORM core to the Adapter. Contains everything the Adapter needs to translate into a native operation.
+The central struct passed from the ORM core to the Compiler. Contains everything the Compiler needs to translate into a native operation.
 
 ```go
 type Query struct {
@@ -111,71 +113,90 @@ type Query struct {
 }
 ```
 
-> There is no `Args []any` field. All condition values live inside `Conditions[].Value` to avoid redundancy.
-
 ---
 
-### 3.3. `Adapter` Interface (The Injection)
+### 3.3. `Compiler` Interface
 
-The interface that Postgres, SQLite, or IndexedDB adapters must implement. Responsible for translating a `Query` into a native language and executing it.
+Responsible for translating ORM queries into executable plans for a specific engine.
+
+Examples:
+- SQL Compiler
+- IndexedDB Compiler
+- KV Compiler
+
+The ORM core remains engine-agnostic.
 
 ```go
-type Adapter interface {
-    // Execute handles all CRUD operations with a single method.
-    // For single-row reads (ActionRead):   factory and each are nil; m is mutated via Pointers().
-    // For multi-row reads (ActionReadAll): m is nil; factory creates each instance; each receives it.
-    // For write operations:                factory and each are nil; m provides TableName/Columns/Values.
-    Execute(q Query, m Model, factory func() Model, each func(Model)) error
+type Compiler interface {
+    Compile(q Query, m Model) (Plan, error)
 }
 ```
 
-This unified signature avoids splitting the interface into multiple methods while making the contract explicit via documentation.
+#### `Plan` (Execution Instructions)
+
+Ensure `Plan` is minimal and efficient.
+
+```go
+type Plan struct {
+    Mode  Action
+    Query string
+    Args  []any
+}
+```
 
 ---
 
-### 3.4. Transaction Interfaces (Optional Extension)
+### 3.4. `Executor` Interface (Execution)
 
-Not all database engines support transactions (e.g., some IndexedDB patterns). Transaction support is **optional**: adapters implement these interfaces only if their engine supports atomic operations.
+Executor must remain `database/sql` compatible, mock friendly, and engine independent. It does not import `database/sql`.
 
 ```go
-// TxBound is an Adapter that is already bound to an active transaction.
-// Returned by TxAdapter.BeginTx(). Carries Commit and Rollback alongside Execute.
-type TxBound interface {
-    Adapter           // Execute operates within the active transaction
+type Executor interface {
+    Exec(query string, args ...any) error
+    QueryRow(query string, args ...any) Scanner
+    Query(query string, args ...any) (Rows, error)
+}
+```
+
+---
+
+### 3.5. Transaction Interfaces (Optional Extension)
+
+Not all database engines support transactions. Transaction support is **optional**: executors implement these interfaces only if their engine supports atomic operations.
+
+```go
+// TxBoundExecutor represents an executor bound to a transaction.
+type TxBoundExecutor interface {
+    Executor
     Commit() error
     Rollback() error
 }
 
-// TxAdapter is an optional extension for adapters that support transactions.
-// If the underlying adapter does not implement TxAdapter, DB.Tx() returns ErrNoTxSupport.
-type TxAdapter interface {
-    BeginTx() (TxBound, error)
+// TxExecutor represents an executor that supports transactions.
+type TxExecutor interface {
+    Executor
+    BeginTx() (TxBoundExecutor, error)
 }
 ```
 
-**Why two interfaces instead of one?**
-`TxAdapter` is the **capability check** (does this adapter support transactions?). `TxBound` is the **active handle** returned after `BEGIN` — it implements `Adapter` so the same `DB` methods (`Create`, `Update`, `Delete`, `Query`) work transparently inside a transaction, plus `Commit`/`Rollback` to control the boundary.
-
 ---
 
-### 3.5. The Core of the ORM (Public API)
+### 3.6. The Core of the ORM (Public API)
 
 The `DB` struct is instantiated from `cmd/main.go` and injected into handler/logic layers.
 
 #### Write Operations (Direct — no builder)
 
 ```go
-type DB struct { adapter Adapter }
+type DB struct { exec Executor, compiler Compiler }
 
-func New(adapter Adapter) *DB
+func New(exec Executor, compiler Compiler) *DB
 
 func (db *DB) Create(m Model) error
 func (db *DB) Update(m Model, conds ...Condition) error
 func (db *DB) Delete(m Model, conds ...Condition) error
 
 // Tx executes fn inside an atomic transaction.
-// On fn error → automatic Rollback. On nil → automatic Commit.
-// Returns ErrNoTxSupport if the adapter does not implement TxAdapter.
 func (db *DB) Tx(fn func(tx *DB) error) error
 ```
 
@@ -205,9 +226,9 @@ func (q *QB) GroupBy(cols ...string) *QB
 // Returns orm.ErrNotFound if no row matches.
 func (q *QB) ReadOne() error
 
-// ReadAll executes the query; for each row it calls factory() to get a fresh Model,
-// scans into its Pointers(), then calls each(m). The caller owns accumulation.
-func (q *QB) ReadAll(factory func() Model, each func(Model)) error
+// ReadAll executes the query; for each row it calls new() to get a fresh Model,
+// scans into its Pointers(), then calls onRow(m). The caller owns accumulation.
+func (q *QB) ReadAll(new func() Model, onRow func(Model)) error
 ```
 
 #### Condition Helpers
@@ -225,7 +246,7 @@ func Or(c Condition) Condition             // wraps c with Logic = "OR"
 
 ---
 
-### 3.6. Sentinel Errors
+### 3.7. Sentinel Errors
 
 ```go
 var (
@@ -243,9 +264,9 @@ Callers use `errors.Is(err, orm.ErrNotFound)` to branch on error type without st
 ## 4. Advantages of this Design
 
 1. **Fully Stdlib & WASM Compatible:** `tinywasm/orm` core does not import `database/sql` nor interact with the OS or Network.
-2. **Separation of Concerns:** The ORM packs/unpacks data (Model → Query). Adapters (external repos like `tinywasm/postgre` or `tinywasm/sqlite`) only know how to execute (Query → DB Engine).
-3. **Zero-Alloc ReadMany:** The `Many(factory, each)` push-based pattern avoids internal slice management; the caller decides whether to accumulate, stream, or discard rows.
-4. **Type-Safe Actions:** `Action int` constants prevent adapter logic errors from typos at compile time.
-5. **Composable Queries:** The `QB` builder allows incremental construction of complex queries in handler logic (conditional `Where`, dynamic `OrderBy`) without string concatenation.
-6. **Testable without Real Databases:** A `MockAdapter` (stores the received `Query` in memory) can validate all business logic without touching disks or ports.
-7. **Optional Transactions:** The `TxAdapter`/`TxBound` pattern allows adapters to opt-in to transaction support without modifying the core `Adapter` interface. Adapters that don't support transactions (e.g., simple IndexedDB patterns) are unaffected.
+2. **Separation of Concerns:** The ORM packs/unpacks data (`Model` → `Query`). `Compiler` translates logic (`Query` → `Plan`). `Executor` runs operations on DB Engine.
+3. **Zero-Alloc ReadMany:** The `ReadAll(new, onRow)` push-based pattern avoids internal slice management; the caller decides whether to accumulate, stream, or discard rows.
+4. **Type-Safe Actions:** `Action int` constants prevent logic errors from typos at compile time.
+5. **Composable Queries:** The `QB` builder allows incremental construction of complex queries in handler logic without string concatenation.
+6. **Testable without Real Databases:** A `MockExecutor` and `MockCompiler` can validate all business logic without touching disks or ports.
+7. **Optional Transactions:** The `TxExecutor`/`TxBoundExecutor` pattern allows engines to opt-in to transaction support without modifying the core `Executor` interface.

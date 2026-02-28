@@ -3,15 +3,15 @@ package orm
 // DB represents a database connection.
 // Consumers instantiate it via New().
 type DB struct {
-	exec    Executor
-	planner Planner
+	exec     Executor
+	compiler Compiler
 }
 
 // New creates a new DB instance.
-func New(exec Executor, planner Planner) *DB {
+func New(exec Executor, compiler Compiler) *DB {
 	return &DB{
-		exec:    exec,
-		planner: planner,
+		exec:     exec,
+		compiler: compiler,
 	}
 }
 
@@ -26,7 +26,7 @@ func (db *DB) Create(m Model) error {
 		Columns: m.Columns(),
 		Values:  m.Values(),
 	}
-	plan, err := db.planner.Plan(q, m)
+	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (db *DB) Update(m Model, conds ...Condition) error {
 		Values:     m.Values(),
 		Conditions: conds,
 	}
-	plan, err := db.planner.Plan(q, m)
+	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (db *DB) Delete(m Model, conds ...Condition) error {
 		Table:      m.TableName(),
 		Conditions: conds,
 	}
-	plan, err := db.planner.Plan(q, m)
+	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
 		return err
 	}
