@@ -76,6 +76,11 @@ func (c *Clause) Like(value any) *QB {
 	return c.qb.addCondition(Like(c.field, value))
 }
 
+// In creates an IN condition.
+func (c *Clause) In(value any) *QB {
+	return c.qb.addCondition(In(c.field, value))
+}
+
 // Limit sets the limit for the query.
 func (qb *QB) Limit(limit int) *QB {
 	qb.limit = limit

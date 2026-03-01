@@ -2,6 +2,7 @@ package tests
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -331,6 +332,7 @@ func RunCoreTests(t *testing.T) {
 			{"Lt", orm.Lt("c", 3), "<", 3},
 			{"Lte", orm.Lte("d", 4), "<=", 4},
 			{"Like", orm.Like("e", "%test%"), "LIKE", "%test%"},
+			{"In", orm.In("f", []int{1, 2}), "IN", []int{1, 2}},
 		}
 
 		for _, tc := range tests {
@@ -338,7 +340,8 @@ func RunCoreTests(t *testing.T) {
 				if tc.cond.Operator() != tc.expected {
 					t.Errorf("Expected operator %s, got %s", tc.expected, tc.cond.Operator())
 				}
-				if tc.cond.Value() != tc.val {
+				// Use reflect.DeepEqual to handle slices in value types
+				if !reflect.DeepEqual(tc.cond.Value(), tc.val) {
 					t.Errorf("Expected value %v, got %v", tc.val, tc.cond.Value())
 				}
 				if tc.cond.Logic() != "AND" {

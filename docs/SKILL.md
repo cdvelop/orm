@@ -37,7 +37,7 @@ For a `struct User`, the `ormc` compiler generates:
 ### Core Structs
 - `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`, `Close`, `RawExecutor`
 - `QB` (Fluent API): `Where("col")`, `Limit(n)`, `Offset(n)`, `OrderBy("col")`, `GroupBy("cols...")`
-- `Clause` (Chainable): `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`
+- `Clause` (Chainable): `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`, `.In()`
 - `OrderClause` (Chainable): `.Asc()`, `.Desc()`
 - `Plan`: `Mode`, `Query`, `Args`
 

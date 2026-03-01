@@ -84,6 +84,16 @@ func Like(field string, value any) Condition {
 	}
 }
 
+// In creates a condition for checking if a value is in a list of values.
+func In(field string, value any) Condition {
+	return Condition{
+		field:    field,
+		operator: "IN",
+		value:    value,
+		logic:    "AND",
+	}
+}
+
 // Or creates a condition with OR logic.
 func Or(c Condition) Condition {
 	c.logic = "OR"
