@@ -20,10 +20,10 @@ go install github.com/tinywasm/devflow/cmd/gotest@latest
 ```
 
 ## 2. Refactor Generated File Suffix
-**Goal:** Auto-generated files should strictly be named `_db.go` instead of `_orm.go`.
+**Goal:** Auto-generated files should strictly be named `_db.go` instead of `_db.go`.
 * **File:** `ormc.go` (around line 406)
 * **Action:** Update the string suffix assignment in the file writer:
-  * From: `outName := Convert(sourceFile).TrimSuffix(".go").String() + "_orm.go"`
+  * From: `outName := Convert(sourceFile).TrimSuffix(".go").String() + "_db.go"`
   * To: `outName := Convert(sourceFile).TrimSuffix(".go").String() + "_db.go"`
 
 ## 3. Simplify Generated Header
@@ -45,17 +45,17 @@ go install github.com/tinywasm/devflow/cmd/gotest@latest
 * **Action:** Remove the forced concatenation of `"s"` during the `tableName` fallback detection:
   * From: `tableName = Convert(structName + "s").SnakeLow().String()`
   * To: `tableName = Convert(structName).SnakeLow().String()`
-* **Validation:** Write a test asserting that a struct like `User` accurately generates the table name `"user"`, not `"users"`.
+* **Validation:** Write a test asserting that a struct like `User` accurately generates the table name `"user"`, not `"user"`.
 
 ## 5. Metadata Field Renaming (`Meta` -> `_`)
 **Goal:** Drop the `Meta` suffix for struct field definitions and adopt a clean underscore `_` suffix.
 * **Why not a prefix `_User`?** In Go, visibility semantics define that identifiers starting with an underscore (or lowercase letter) are unexported. If we generate `var _User = struct {...}`, it cannot be read across packages (e.g., from `handlers` accessing `models._User`). A trailing underscore, `var User_ = struct {...}`, uses a capitalized first letter (maintaining export privileges) while retaining aesthetic separation and preventing name clashes with the core `User` struct.
 * **File:** `ormc.go` (lines 359, 394 and other usages)
 * **Action:** 
-  * Replace `%sMeta` string generation with `%s_`. Example: `UserMeta` becomes `User_`.
+  * Replace `%sMeta` string generation with `%s_`. Example: `User_` becomes `User_`.
   * Ensure methods relying on the descriptor (like `ReadAll%sBy%s`) cleanly inject the trailing underscore into their queries (e.g., `.Where(%s_.%s).Eq...`).
 
 ## 6. Testing & Documentation
 * Update existing unit/integration tests in `tinywasm/orm` to expect `_db.go`, the un-pluralized table generation logic, and the new trailing underscore descriptor `User_`.
-* Update `docs/SKILL.md` to reflect these exact changes. Rename instances of `_orm.go` to `_db.go` and `UserMeta` to `User_`.
+* Update `docs/SKILL.md` to reflect these exact changes. Rename instances of `_db.go` to `_db.go` and `User_` to `User_`.
 * Run tests with the `gotest` command to verify there are no compilation errors downstream from file renaming.

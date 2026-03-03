@@ -30,7 +30,7 @@ func TestOrmc_MultiStruct(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -80,10 +80,10 @@ func TestOrmc_Run(t *testing.T) {
 		}
 
 		// The generated file must exist
-		outFile := filepath.Join(tmp, "model_orm.go")
+		outFile := filepath.Join(tmp, "model_db.go")
 		content, err := os.ReadFile(outFile)
 		if err != nil {
-			t.Fatalf("Expected model_orm.go, got error: %v", err)
+			t.Fatalf("Expected model_db.go, got error: %v", err)
 		}
 
 		s := string(content)
@@ -115,7 +115,7 @@ func TestOrmc_DetectPointerReceiver(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -190,7 +190,7 @@ func TestOrmc_TableNameDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -208,7 +208,7 @@ func TestOrmc_TableNameDetection(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -228,7 +228,7 @@ func TestOrmc_DbIgnoreTag(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)

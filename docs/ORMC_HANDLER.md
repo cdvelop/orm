@@ -82,7 +82,7 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error { ..
 // ParseStruct parses a single struct from a Go file. Returns StructInfo.
 func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error) { ... }
 
-// Run scans o.rootDir for model.go/models.go files and generates _orm.go files.
+// Run scans o.rootDir for model.go/models.go files and generates _db.go files.
 // Returns error instead of calling os.Exit.
 func (o *Ormc) Run() error { ... }
 ```

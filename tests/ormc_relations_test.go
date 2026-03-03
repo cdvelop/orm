@@ -56,7 +56,7 @@ func TestOrmc_RelationLoader(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "mock_generator_model_db.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)

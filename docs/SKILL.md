@@ -52,7 +52,7 @@ type Model interface {
 ### Auto-Generated Code (`cmd/ormc`)
 
 Run `ormc` from the **project root**. It recursively scans all subdirectories looking
-for `model.go` or `models.go`, and generates a single `model_orm.go` next to each
+for `model.go` or `models.go`, and generates a single `model_db.go` next to each
 source file found (always overwritten). All structs in the same file are generated
 into one output file.
 
@@ -64,8 +64,8 @@ Typical project structure:
 ```
 project/
   modules/
-    user/model.go      → generates modules/user/model_orm.go  (all structs)
-    product/models.go  → generates modules/product/model_orm.go (all structs)
+    user/model.go      → generates modules/user/model_db.go  (all structs)
+    product/models.go  → generates modules/product/model_db.go (all structs)
 ```
 
 Use a single `//go:generate` at the project root — **not** per struct:
@@ -93,17 +93,17 @@ if err := o.Run(); err != nil {    // Run() uses o.rootDir, no parameter
 | `NewOrmc() *Ormc` | Create handler; `rootDir` defaults to `"."` |
 | `(o) SetLog(func(...any))` | Set warning/info log function |
 | `(o) SetRootDir(dir string)` | Set scan root (useful for tests: no `os.Chdir` needed) |
-| `(o) Run() error` | Scan `rootDir` for `model.go`/`models.go`, generate `_orm.go` |
+| `(o) Run() error` | Scan `rootDir` for `model.go`/`models.go`, generate `_db.go` |
 | `(o) GenerateForStruct(name, file string) error` | Generate for a single named struct |
 | `(o) ParseStruct(name, file string) (StructInfo, error)` | Parse struct metadata only |
-| `(o) GenerateForFile(infos []StructInfo, file string) error` | Write all infos to one `_orm.go` |
+| `(o) GenerateForFile(infos []StructInfo, file string) error` | Write all infos to one `_db.go` |
 
-For a `struct User`, `ormc` generates in `model_orm.go`:
+For a `struct User`, `ormc` generates in `model_db.go`:
 - `func (m *User) Schema() []orm.Field`
 - `func (m *User) Values() []any`
 - `func (m *User) Pointers() []any`
 - `func (m *User) TableName() string` *(only if NOT already declared in source)*
-- `UserMeta` struct with typed column name constants
+- `User_` struct with typed column name constants
 - `ReadOneUser(qb *orm.QB, model *User) (*User, error)`
 - `ReadAllUser(qb *orm.QB) ([]*User, error)`
 
@@ -117,11 +117,11 @@ Slice-of-struct fields (e.g. `[]Role`) are **automatically mapped** to one-to-ma
 type User struct {
     ID    string
     Name  string
-    Roles []Role // auto-mapped via Role.UserID db:"ref=users"
+    Roles []Role // auto-mapped via Role.UserID db:"ref=user"
 }
 ```
 
-This generates `ReadAllRoleByUserID(db, id)` in the child's `_orm.go`.
+This generates `ReadAllRoleByUserID(db, id)` in the child's `_db.go`.
 
 
 ### `TableName()` auto-detection
@@ -146,12 +146,12 @@ a duplicate**. If absent, `ormc` generates it as the snake_case plural of the st
 // 2. Query builder uses a Fluent API chain
 // 3. Results are executed and cast by auto-generated typed functions
 qb := db.Query(m).
-    Where(UserMeta.Age).Eq(18).
-    Or().Where(UserMeta.Name).Like("A%").
-    OrderBy(UserMeta.CreatedAt).Desc().
+    Where(User_.Age).Eq(18).
+    Or().Where(User_.Name).Like("A%").
+    OrderBy(User_.CreatedAt).Desc().
     Limit(10)
 
-users, err := models.ReadAllUser(qb)
+user, err := models.ReadAllUser(qb)
 
 // Schema DDL (adapter handles IF NOT EXISTS / IF EXISTS internally)
 if err := db.CreateTable(&User{}); err != nil { ... }

@@ -17,7 +17,7 @@ func RunCoreTests(t *testing.T) {
 		db := orm.New(mockExec, mockCompiler)
 
 		model := &MockModel{
-			Table: "users",
+			Table: "user",
 			Sch:   []orm.Field{{Name: "name"}, {Name: "age"}},
 			Vals:  []any{"Alice", 30},
 		}
@@ -30,8 +30,8 @@ func RunCoreTests(t *testing.T) {
 		if mockCompiler.LastQuery.Action != orm.ActionCreate {
 			t.Errorf("Expected ActionCreate, got %v", mockCompiler.LastQuery.Action)
 		}
-		if mockCompiler.LastQuery.Table != "users" {
-			t.Errorf("Expected table 'users', got '%s'", mockCompiler.LastQuery.Table)
+		if mockCompiler.LastQuery.Table != "user" {
+			t.Errorf("Expected table 'user', got '%s'", mockCompiler.LastQuery.Table)
 		}
 		if len(mockCompiler.LastQuery.Columns) != 2 {
 			t.Errorf("Expected 2 columns, got %d", len(mockCompiler.LastQuery.Columns))
@@ -45,7 +45,7 @@ func RunCoreTests(t *testing.T) {
 		db := orm.New(mockExec, mockCompiler)
 
 		model := &MockModel{
-			Table: "users",
+			Table: "user",
 			Sch:   []orm.Field{{Name: "age"}},
 			Vals:  []any{31},
 		}
@@ -72,7 +72,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
 
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 
 		err := db.Delete(model, orm.Gt("age", 100))
 		if err != nil {
@@ -93,7 +93,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
 
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 
 		// Setup MockExecutor to return a scanner that succeeds
 		mockExec.ReturnQueryRow = &MockScanner{}
@@ -137,7 +137,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
 
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 
 		// Simulate 2 rows
 		mockRows := &MockRows{Count: 2}
@@ -186,7 +186,7 @@ func RunCoreTests(t *testing.T) {
 	t.Run("Validation Error Create", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
-			Table: "users",
+			Table: "user",
 			Sch:   []orm.Field{{Name: "col1"}},
 			Vals:  []any{1, 2}, // Mismatch
 		}
@@ -203,7 +203,7 @@ func RunCoreTests(t *testing.T) {
 	t.Run("Validation Error Update", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
-			Table: "users",
+			Table: "user",
 			Sch:   []orm.Field{{Name: "col1"}},
 			Vals:  []any{1, 2}, // Mismatch
 		}
@@ -372,7 +372,7 @@ func RunCoreTests(t *testing.T) {
 		mockCompiler := &MockCompiler{}
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 		mockExec.ReturnQueryRow = &MockScanner{}
 
 		db.Query(model).OrderBy("col").Asc().ReadOne()
@@ -395,7 +395,7 @@ func RunCoreTests(t *testing.T) {
 		mockCompiler := &MockCompiler{}
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 		mockExec.ReturnQueryRow = &MockScanner{}
 
 		// Test Offset and GroupBy
@@ -428,7 +428,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec := &MockExecutor{}
 		db := orm.New(mockExec, mockCompiler)
 
-		model := &MockModel{Table: "users"}
+		model := &MockModel{Table: "user"}
 
 		// CreateTable
 		err := db.CreateTable(model)
@@ -438,8 +438,8 @@ func RunCoreTests(t *testing.T) {
 		if mockCompiler.LastQuery.Action != orm.ActionCreateTable {
 			t.Errorf("Expected ActionCreateTable, got %v", mockCompiler.LastQuery.Action)
 		}
-		if mockCompiler.LastQuery.Table != "users" {
-			t.Errorf("Expected table 'users', got '%s'", mockCompiler.LastQuery.Table)
+		if mockCompiler.LastQuery.Table != "user" {
+			t.Errorf("Expected table 'user', got '%s'", mockCompiler.LastQuery.Table)
 		}
 
 		// DropTable
@@ -450,8 +450,8 @@ func RunCoreTests(t *testing.T) {
 		if mockCompiler.LastQuery.Action != orm.ActionDropTable {
 			t.Errorf("Expected ActionDropTable, got %v", mockCompiler.LastQuery.Action)
 		}
-		if mockCompiler.LastQuery.Table != "users" {
-			t.Errorf("Expected table 'users', got '%s'", mockCompiler.LastQuery.Table)
+		if mockCompiler.LastQuery.Table != "user" {
+			t.Errorf("Expected table 'user', got '%s'", mockCompiler.LastQuery.Table)
 		}
 
 		// CreateDatabase

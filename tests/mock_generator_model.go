@@ -17,7 +17,7 @@ type User struct {
 
 type Order struct {
 	ID        string `db:"pk"`
-	UserID    int    `db:"ref=users:id"`
+	UserID    int    `db:"ref=user:id"`
 	Total     float64
 }
 
@@ -64,7 +64,7 @@ type NumericTypes struct {
 // RefNoColumn covers db:"ref=table" without a specific column (RefColumn must be "").
 type RefNoColumn struct {
 	IDRef    string `db:"pk"`
-	ParentID int64  `db:"ref=parents"`
+	ParentID int64  `db:"ref=parent"`
 }
 
 // PointerReceiver tests that detectTableName handles pointer receivers (*T).
@@ -84,6 +84,6 @@ type MockParent struct {
 
 type MockChild struct {
 	ID           string `db:"pk"`
-	MockParentID string `db:"ref=mock_parents"`
+	MockParentID string `db:"ref=mock_parent"`
 	Value        string
 }
