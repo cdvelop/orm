@@ -127,7 +127,7 @@ This generates `ReadAllRoleByUserID(db, id)` in the child's `_db.go`.
 ### `TableName()` auto-detection
 
 If the source file already declares `func (X) TableName() string`, `ormc` **will not generate
-a duplicate**. If absent, `ormc` generates it as the snake_case plural of the struct name.
+a duplicate**. If absent, `ormc` generates it as the snake_case of the struct name.
 
 ### Core Structs
 - `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`, `Close`, `RawExecutor`, `CreateTable`, `DropTable`, `CreateDatabase`
@@ -142,7 +142,7 @@ a duplicate**. If absent, `ormc` generates it as the snake_case plural of the st
 ## Usage Snippet
 
 ```go
-// 1. Where clauses use generated Meta descriptors (no magic strings)
+// 1. Where clauses use generated _ descriptors (no magic strings)
 // 2. Query builder uses a Fluent API chain
 // 3. Results are executed and cast by auto-generated typed functions
 qb := db.Query(m).

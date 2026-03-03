@@ -209,8 +209,8 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		// Ref present, RefColumn must be absent (empty string omitted from generated code)
-		if !strings.Contains(content, `Ref: "parents"`) {
-			t.Errorf("Expected Ref=parents in generated file")
+		if !strings.Contains(content, `Ref: "parent"`) {
+			t.Errorf("Expected Ref=parent in generated file")
 		}
 		if strings.Contains(content, "RefColumn") {
 			t.Errorf("RefColumn must be absent when ref tag has no column")
