@@ -208,7 +208,7 @@ func RunCoreTests(t *testing.T) {
 			Vals:  []any{1, 2}, // Mismatch
 		}
 
-		err := db.Update(model)
+		err := db.Update(model, orm.Eq("id", 1))
 		if err == nil {
 			t.Error("Expected error, got nil")
 		} else if !strings.Contains(err.Error(), orm.ErrValidation.Error()) {
@@ -221,11 +221,15 @@ func RunCoreTests(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{Table: ""} // Empty table
 
-		err := db.Delete(model)
+		err := db.Delete(model, orm.Eq("id", 1))
 		if !errors.Is(err, orm.ErrEmptyTable) {
 			t.Errorf("Expected ErrEmptyTable, got %v", err)
 		}
 	})
+
+	// Compile-time guarantee: db.Update(&m) with zero conditions no longer compiles.
+	// No test case needed — the Go compiler enforces this contract.
+	// See: docs/ARQUITECTURE.md section 3.6
 
 	// 8. Test Empty Table Error
 	t.Run("Empty Table Error", func(t *testing.T) {
@@ -487,20 +491,20 @@ func RunCoreTests(t *testing.T) {
 		}
 
 		// Update Plan Error
-		if err := db1.Update(model); err == nil || err.Error() != "plan err" {
+		if err := db1.Update(model, orm.Eq("id", 1)); err == nil || err.Error() != "plan err" {
 			t.Errorf("Expected plan err, got %v", err)
 		}
 		// Update Exec Error
-		if err := db2.Update(model); err == nil || err.Error() != "exec err" {
+		if err := db2.Update(model, orm.Eq("id", 1)); err == nil || err.Error() != "exec err" {
 			t.Errorf("Expected exec err, got %v", err)
 		}
 
 		// Delete Plan Error
-		if err := db1.Delete(model); err == nil || err.Error() != "plan err" {
+		if err := db1.Delete(model, orm.Eq("id", 1)); err == nil || err.Error() != "plan err" {
 			t.Errorf("Expected plan err, got %v", err)
 		}
 		// Delete Exec Error
-		if err := db2.Delete(model); err == nil || err.Error() != "exec err" {
+		if err := db2.Delete(model, orm.Eq("id", 1)); err == nil || err.Error() != "exec err" {
 			t.Errorf("Expected exec err, got %v", err)
 		}
 
