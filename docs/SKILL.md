@@ -130,7 +130,9 @@ If the source file already declares `func (X) TableName() string`, `ormc` **will
 a duplicate**. If absent, `ormc` generates it as the snake_case of the struct name.
 
 ### Core Structs
-- `DB`: `New(Executor, Compiler)`, `Create`, `Update`, `Delete`, `Query`, `Tx`, `Close`, `RawExecutor`, `CreateTable`, `DropTable`, `CreateDatabase`
+- `DB`: `New(Executor, Compiler)`, `Create`, `Update(m, cond, rest...)`,
+        `Delete(m, cond, rest...)`, `Query`, `Tx`, `Close`, `RawExecutor`,
+        `CreateTable`, `DropTable`, `CreateDatabase`
 - `QB` (Fluent API): `Where("col")`, `Limit(n)`, `Offset(n)`, `OrderBy("col")`, `GroupBy("cols...")`
 - `Clause` (Chainable): `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`, `.In()`
 - `OrderClause` (Chainable): `.Asc()`, `.Desc()`
@@ -138,6 +140,27 @@ a duplicate**. If absent, `ormc` generates it as the snake_case of the struct na
 
 ### Constants
 - `Action`: `ActionCreate`, `ActionReadOne`, `ActionUpdate`, `ActionDelete`, `ActionReadAll`, `ActionCreateTable`, `ActionDropTable`, `ActionCreateDatabase`
+
+## API Safety Contract
+
+### `Update` and `Delete` require at least one Condition
+
+```go
+// ✅ Correct — explicit WHERE clause, single row targeted
+db.Update(&res, orm.Eq(Reservation_.ID, res.ID))
+
+// ✅ Correct — multiple conditions still work
+db.Update(&cfg, orm.Eq(Config_.TenantID, tid), orm.Eq(Config_.StaffID, sid))
+
+// ❌ Compile error — zero conditions is forbidden
+db.Update(&res)
+```
+
+This is enforced at compile time by Go's type system (non-variadic first argument).
+No test coverage is required to guarantee this property.
+See: `docs/ARQUITECTURE.md` section 3.6
+
+---
 
 ## Usage Snippet
 
