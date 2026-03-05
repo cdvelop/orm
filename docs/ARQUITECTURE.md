@@ -193,8 +193,14 @@ type DB struct { exec Executor, compiler Compiler }
 func New(exec Executor, compiler Compiler) *DB
 
 func (db *DB) Create(m Model) error
-func (db *DB) Update(m Model, conds ...Condition) error
-func (db *DB) Delete(m Model, conds ...Condition) error
+// Update modifies an existing row. At least one Condition is required.
+// Providing zero conditions is a compile-time error, preventing accidental
+// full-table UPDATE statements.
+func (db *DB) Update(m Model, cond Condition, rest ...Condition) error
+
+// Delete removes rows matching the given conditions.
+// At least one Condition is required to prevent accidental full-table DELETE.
+func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error
 
 // Tx executes fn inside an atomic transaction.
 func (db *DB) Tx(fn func(tx *DB) error) error

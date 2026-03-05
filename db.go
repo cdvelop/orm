@@ -38,11 +38,14 @@ func (db *DB) Create(m Model) error {
 	return db.exec.Exec(plan.Query, plan.Args...)
 }
 
-// Update updates a model in the database.
-func (db *DB) Update(m Model, conds ...Condition) error {
+// Update modifies an existing row. At least one Condition is required.
+// Providing zero conditions is a compile-time error — there is no variadic
+// fallback — preventing accidental full-table UPDATE statements.
+func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
 	if err := validate(ActionUpdate, m); err != nil {
 		return err
 	}
+	conds := append([]Condition{cond}, rest...)
 	schema := m.Schema()
 	columns := make([]string, len(schema))
 	for i, f := range schema {
@@ -120,10 +123,13 @@ func (db *DB) CreateDatabase(name string) error {
 }
 
 // Delete deletes a model from the database.
-func (db *DB) Delete(m Model, conds ...Condition) error {
+// At least one Condition is required. Providing zero conditions is a compile-time
+// error, preventing accidental full-table DELETE statements.
+func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error {
 	if err := validate(ActionDelete, m); err != nil {
 		return err
 	}
+	conds := append([]Condition{cond}, rest...)
 	q := Query{
 		Action:     ActionDelete,
 		Table:      m.TableName(),
