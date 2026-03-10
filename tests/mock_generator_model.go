@@ -87,3 +87,18 @@ type MockChild struct {
 	MockParentID string `db:"ref=mock_parent"`
 	Value        string
 }
+
+type UserForm struct {
+	ID       string `db:"pk"`
+	Name     string
+	Email    string `db:"not_null" form:"email"`
+	Password string `form:"password"`
+	Bio      string `form:"textarea"`
+	Age      int64  `form:"-"`
+}
+
+// ormc:formonly
+type LoginForm struct {
+	Email    string `form:"email"`
+	Password string `form:"password"`
+}

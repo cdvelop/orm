@@ -8,19 +8,24 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 
 	. "github.com/tinywasm/fmt"
 )
 
 type FieldInfo struct {
-	Name        string
-	ColumnName  string
-	Type        FieldType
-	Constraints Constraint
-	Ref         string
-	RefColumn   string
-	IsPK        bool
-	GoType      string
+	Name       string
+	ColumnName string
+	Type       FieldType
+	PK         bool
+	Unique     bool
+	NotNull    bool
+	AutoInc    bool
+	Ref        string
+	RefColumn  string
+	IsPK       bool
+	GoType     string
+	Input      string
 }
 
 // SliceFieldInfo records a slice-of-struct field found in a parent struct.
@@ -36,6 +41,7 @@ type StructInfo struct {
 	PackageName       string
 	Fields            []FieldInfo
 	TableNameDeclared bool
+	FormOnly          bool
 	SourceFile        string
 	SliceFields       []SliceFieldInfo // populated by ParseStruct; used by ResolveRelations
 	Relations         []RelationInfo   // populated by ResolveRelations; used by GenerateForFile
@@ -93,14 +99,27 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 	var targetStruct *ast.StructType
 	var structFound bool
+	var formOnly bool
 
 	ast.Inspect(node, func(n ast.Node) bool {
-		if typeSpec, ok := n.(*ast.TypeSpec); ok {
-			if typeSpec.Name.Name == structName {
-				if structType, ok := typeSpec.Type.(*ast.StructType); ok {
-					targetStruct = structType
-					structFound = true
-					return false
+		if genDecl, ok := n.(*ast.GenDecl); ok {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					if typeSpec.Name.Name == structName {
+						if structType, ok := typeSpec.Type.(*ast.StructType); ok {
+							targetStruct = structType
+							structFound = true
+							if genDecl.Doc != nil {
+								for _, comment := range genDecl.Doc.List {
+									if strings.Contains(comment.Text, "ormc:formonly") {
+										formOnly = true
+										break
+									}
+								}
+							}
+							return false
+						}
+					}
 				}
 			}
 		}
@@ -122,6 +141,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		TableName:         tableName,
 		PackageName:       node.Name.Name,
 		TableNameDeclared: declared,
+		FormOnly:          formOnly,
 	}
 
 	pkFound := false
@@ -136,13 +156,15 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		dbTag := ""
+		formTag := ""
 		if field.Tag != nil {
 			tagVal := Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
 			parts := Convert(tagVal).Split(" ")
 			for _, p := range parts {
 				if HasPrefix(p, "db:\"") {
 					dbTag = Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
-					break
+				} else if HasPrefix(p, "form:\"") {
+					formTag = Convert(p).TrimPrefix(`form:"`).TrimSuffix(`"`).String()
 				}
 			}
 		}
@@ -185,15 +207,15 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 		switch typeStr {
 		case "string":
-			fieldType = TypeText
+			fieldType = FieldText
 		case "int", "int32", "int64", "uint", "uint32", "uint64":
-			fieldType = TypeInt64
+			fieldType = FieldInt
 		case "float32", "float64":
-			fieldType = TypeFloat64
+			fieldType = FieldFloat
 		case "bool":
-			fieldType = TypeBool
+			fieldType = FieldBool
 		case "[]byte":
-			fieldType = TypeBlob
+			fieldType = FieldBlob
 		default:
 			o.log(Sprintf("Warning: unsupported type %s for field %s.%s; skipping. Add db:\"-\" to suppress.", typeStr, structName, fieldName))
 			continue
@@ -202,14 +224,14 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		colName := Convert(fieldName).SnakeLow().String()
 		isID, isPK := IDorPrimaryKey(tableName, fieldName)
 
-		constraints := ConstraintNone
+		var pk, unique, notNull, autoInc bool
 		var ref, refCol string
 
 		fieldIsPK := false
 		if (isID || isPK) && !pkFound {
 			fieldIsPK = true
 			pkFound = true
-			constraints |= ConstraintPK
+			pk = true
 		}
 
 		if dbTag != "" {
@@ -218,19 +240,19 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 				switch {
 				case p == "pk":
 					if !fieldIsPK {
-						constraints |= ConstraintPK
+						pk = true
 						fieldIsPK = true
 						pkFound = true
 					}
 				case p == "unique":
-					constraints |= ConstraintUnique
+					unique = true
 				case p == "not_null":
-					constraints |= ConstraintNotNull
+					notNull = true
 				case p == "autoincrement":
-					if fieldType == TypeText {
-						return StructInfo{}, Err("autoincrement not allowed on TypeText")
+					if fieldType == FieldText {
+						return StructInfo{}, Err("autoincrement not allowed on FieldText")
 					}
-					constraints |= ConstraintAutoIncrement
+					autoInc = true
 				case HasPrefix(p, "ref="):
 					refVal := Convert(p).TrimPrefix("ref=").String()
 					refParts := Convert(refVal).Split(":")
@@ -243,14 +265,18 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		info.Fields = append(info.Fields, FieldInfo{
-			Name:        fieldName,
-			ColumnName:  colName,
-			Type:        fieldType,
-			Constraints: constraints,
-			Ref:         ref,
-			RefColumn:   refCol,
-			IsPK:        fieldIsPK,
-			GoType:      typeStr,
+			Name:       fieldName,
+			ColumnName: colName,
+			Type:       fieldType,
+			PK:         pk,
+			Unique:     unique,
+			NotNull:    notNull,
+			AutoInc:    autoInc,
+			Ref:        ref,
+			RefColumn:  refCol,
+			IsPK:       fieldIsPK,
+			GoType:     typeStr,
+			Input:      formTag,
 		})
 	}
 
@@ -281,57 +307,65 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	buf.Write(Sprintf("// DO NOT EDIT. generated by github.com/tinywasm/orm\n\n"))
 	buf.Write(Sprintf("package %s\n\n", infos[0].PackageName))
 
+	hasModel := false
+	for _, info := range infos {
+		if !info.FormOnly {
+			hasModel = true
+			break
+		}
+	}
+
 	buf.Write("import (\n")
-	buf.Write("\t\"github.com/tinywasm/orm\"\n")
+	buf.Write("\t\"github.com/tinywasm/fmt\"\n")
+	if hasModel {
+		buf.Write("\t\"github.com/tinywasm/orm\"\n")
+	}
 	buf.Write(")\n\n")
 
 	for _, info := range infos {
-		// Model Interface Methods
-		if !info.TableNameDeclared {
-			buf.Write(Sprintf("func (m *%s) TableName() string {\n", info.Name))
-			buf.Write(Sprintf("\treturn \"%s\"\n", info.TableName))
-			buf.Write("}\n\n")
+		if !info.FormOnly {
+			// Model Interface Methods
+			if !info.TableNameDeclared {
+				buf.Write(Sprintf("func (m *%s) TableName() string {\n", info.Name))
+				buf.Write(Sprintf("\treturn \"%s\"\n", info.TableName))
+				buf.Write("}\n\n")
+			}
 		}
 
-		buf.Write(Sprintf("func (m *%s) Schema() []orm.Field {\n", info.Name))
-		buf.Write("\treturn []orm.Field{\n")
+		buf.Write(Sprintf("func (m *%s) FormName() string {\n", info.Name))
+		buf.Write(Sprintf("\treturn \"%s\"\n", Convert(info.Name).SnakeLow().String()))
+		buf.Write("}\n\n")
+
+		buf.Write(Sprintf("func (m *%s) Schema() []fmt.Field {\n", info.Name))
+		buf.Write("\treturn []fmt.Field{\n")
 		for _, f := range info.Fields {
-			typeStr := "orm.TypeText"
+			typeStr := "fmt.FieldText"
 			switch f.Type {
-			case TypeInt64:
-				typeStr = "orm.TypeInt64"
-			case TypeFloat64:
-				typeStr = "orm.TypeFloat64"
-			case TypeBool:
-				typeStr = "orm.TypeBool"
-			case TypeBlob:
-				typeStr = "orm.TypeBlob"
+			case FieldInt:
+				typeStr = "fmt.FieldInt"
+			case FieldFloat:
+				typeStr = "fmt.FieldFloat"
+			case FieldBool:
+				typeStr = "fmt.FieldBool"
+			case FieldBlob:
+				typeStr = "fmt.FieldBlob"
 			}
 
-			var constraintStr []string
-			if f.Constraints == ConstraintNone {
-				constraintStr = append(constraintStr, "orm.ConstraintNone")
-			} else {
-				if f.Constraints&ConstraintPK != 0 {
-					constraintStr = append(constraintStr, "orm.ConstraintPK")
-				}
-				if f.Constraints&ConstraintUnique != 0 {
-					constraintStr = append(constraintStr, "orm.ConstraintUnique")
-				}
-				if f.Constraints&ConstraintNotNull != 0 {
-					constraintStr = append(constraintStr, "orm.ConstraintNotNull")
-				}
-				if f.Constraints&ConstraintAutoIncrement != 0 {
-					constraintStr = append(constraintStr, "orm.ConstraintAutoIncrement")
-				}
+			buf.Write(Sprintf("\t\t{Name: \"%s\", Type: %s", f.ColumnName, typeStr))
+			if f.PK {
+				buf.Write(", PK: true")
 			}
-
-			buf.Write(Sprintf("\t\t{Name: \"%s\", Type: %s, Constraints: %s", f.ColumnName, typeStr, Convert(constraintStr).Join(" | ").String()))
-			if f.Ref != "" {
-				buf.Write(Sprintf(", Ref: \"%s\"", f.Ref))
+			if f.Unique {
+				buf.Write(", Unique: true")
 			}
-			if f.RefColumn != "" {
-				buf.Write(Sprintf(", RefColumn: \"%s\"", f.RefColumn))
+			if f.NotNull {
+				buf.Write(", NotNull: true")
+			}
+			if f.AutoInc {
+				buf.Write(", AutoInc: true")
+			}
+			if f.Input != "" {
+				buf.Write(Sprintf(", Input: \"%s\"", f.Input))
 			}
 			buf.Write("},\n")
 		}
@@ -354,51 +388,53 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		buf.Write("\t}\n")
 		buf.Write("}\n\n")
 
-		// Metadata Descriptors
-		buf.Write(Sprintf("var %s_ = struct {\n", info.Name))
-		buf.Write("\tTableName string\n")
-		for _, f := range info.Fields {
-			buf.Write(Sprintf("\t%s string\n", f.Name))
-		}
-		buf.Write("}{\n")
-		buf.Write(Sprintf("\tTableName: \"%s\",\n", info.TableName))
-		for _, f := range info.Fields {
-			buf.Write(Sprintf("\t%s: \"%s\",\n", f.Name, f.ColumnName))
-		}
-		buf.Write("}\n\n")
+		if !info.FormOnly {
+			// Metadata Descriptors
+			buf.Write(Sprintf("var %s_ = struct {\n", info.Name))
+			buf.Write("\tTableName string\n")
+			for _, f := range info.Fields {
+				buf.Write(Sprintf("\t%s string\n", f.Name))
+			}
+			buf.Write("}{\n")
+			buf.Write(Sprintf("\tTableName: \"%s\",\n", info.TableName))
+			for _, f := range info.Fields {
+				buf.Write(Sprintf("\t%s: \"%s\",\n", f.Name, f.ColumnName))
+			}
+			buf.Write("}\n\n")
 
-		// Typed Read Operations
-		buf.Write(Sprintf("func ReadOne%s(qb *orm.QB, model *%s) (*%s, error) {\n", info.Name, info.Name, info.Name))
-		buf.Write("\terr := qb.ReadOne()\n")
-		buf.Write("\tif err != nil {\n")
-		buf.Write("\t\treturn nil, err\n")
-		buf.Write("\t}\n")
-		buf.Write("\treturn model, nil\n")
-		buf.Write("}\n\n")
+			// Typed Read Operations
+			buf.Write(Sprintf("func ReadOne%s(qb *orm.QB, model *%s) (*%s, error) {\n", info.Name, info.Name, info.Name))
+			buf.Write("\terr := qb.ReadOne()\n")
+			buf.Write("\tif err != nil {\n")
+			buf.Write("\t\treturn nil, err\n")
+			buf.Write("\t}\n")
+			buf.Write("\treturn model, nil\n")
+			buf.Write("}\n\n")
 
-		buf.Write(Sprintf("func ReadAll%s(qb *orm.QB) ([]*%s, error) {\n", info.Name, info.Name))
-		buf.Write(Sprintf("\tvar results []*%s\n", info.Name))
-		buf.Write("\terr := qb.ReadAll(\n")
-		buf.Write(Sprintf("\t\tfunc() orm.Model { return &%s{} },\n", info.Name))
-		buf.Write(Sprintf("\t\tfunc(m orm.Model) { results = append(results, m.(*%s)) },\n", info.Name))
-		buf.Write("\t)\n")
-		buf.Write("\treturn results, err\n")
-		buf.Write("}\n\n")
+			buf.Write(Sprintf("func ReadAll%s(qb *orm.QB) ([]*%s, error) {\n", info.Name, info.Name))
+			buf.Write(Sprintf("\tvar results []*%s\n", info.Name))
+			buf.Write("\terr := qb.ReadAll(\n")
+			buf.Write(Sprintf("\t\tfunc() orm.Model { return &%s{} },\n", info.Name))
+			buf.Write(Sprintf("\t\tfunc(m orm.Model) { results = append(results, m.(*%s)) },\n", info.Name))
+			buf.Write("\t)\n")
+			buf.Write("\treturn results, err\n")
+			buf.Write("}\n\n")
 
-		for _, rel := range info.Relations {
-			buf.Write(Sprintf(
-				"// ReadAll%sByParentID retrieves all %s records for a given parent ID.\n"+
-					"// Auto-generated by ormc — relation detected via db:\"ref=%s\".\n"+
-					"func ReadAll%sBy%s(db *orm.DB, parentID %s) ([]*%s, error) {\n"+
-					"\treturn ReadAll%s(db.Query(&%s{}).Where(%s_.%s).Eq(parentID))\n"+
-					"}\n\n",
-				rel.ChildStruct,
-				rel.ChildStruct,
-				info.TableName, // parent table, for the comment
-				rel.ChildStruct, rel.FKField, rel.FKFieldType,
-				rel.ChildStruct,
-				rel.ChildStruct, rel.ChildStruct, rel.ChildStruct, rel.FKField,
-			))
+			for _, rel := range info.Relations {
+				buf.Write(Sprintf(
+					"// ReadAll%sByParentID retrieves all %s records for a given parent ID.\n"+
+						"// Auto-generated by ormc — relation detected via db:\"ref=%s\".\n"+
+						"func ReadAll%sBy%s(db *orm.DB, parentID %s) ([]*%s, error) {\n"+
+						"\treturn ReadAll%s(db.Query(&%s{}).Where(%s_.%s).Eq(parentID))\n"+
+						"}\n\n",
+					rel.ChildStruct,
+					rel.ChildStruct,
+					info.TableName, // parent table, for the comment
+					rel.ChildStruct, rel.FKField, rel.FKFieldType,
+					rel.ChildStruct,
+					rel.ChildStruct, rel.ChildStruct, rel.ChildStruct, rel.FKField,
+				))
+			}
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tinywasm/fmt"
 	"github.com/tinywasm/orm"
 )
 
@@ -18,7 +19,7 @@ func RunCoreTests(t *testing.T) {
 
 		model := &MockModel{
 			Table: "user",
-			Sch:   []orm.Field{{Name: "name"}, {Name: "age"}},
+			Sch:   []fmt.Field{{Name: "name"}, {Name: "age"}},
 			Vals:  []any{"Alice", 30},
 		}
 
@@ -46,7 +47,7 @@ func RunCoreTests(t *testing.T) {
 
 		model := &MockModel{
 			Table: "user",
-			Sch:   []orm.Field{{Name: "age"}},
+			Sch:   []fmt.Field{{Name: "age"}},
 			Vals:  []any{31},
 		}
 
@@ -187,7 +188,7 @@ func RunCoreTests(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table: "user",
-			Sch:   []orm.Field{{Name: "col1"}},
+			Sch:   []fmt.Field{{Name: "col1"}},
 			Vals:  []any{1, 2}, // Mismatch
 		}
 
@@ -204,7 +205,7 @@ func RunCoreTests(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table: "user",
-			Sch:   []orm.Field{{Name: "col1"}},
+			Sch:   []fmt.Field{{Name: "col1"}},
 			Vals:  []any{1, 2}, // Mismatch
 		}
 
@@ -476,7 +477,7 @@ func RunCoreTests(t *testing.T) {
 
 	// 16. Errors coverage
 	t.Run("Errors", func(t *testing.T) {
-		model := &MockModel{Table: "t", Sch: []orm.Field{{Name: "a"}}, Vals: []any{1}}
+		model := &MockModel{Table: "t", Sch: []fmt.Field{{Name: "a"}}, Vals: []any{1}}
 
 		// Create Plan Error
 		db1 := orm.New(&MockExecutor{}, &MockCompiler{ReturnErr: errors.New("plan err")})

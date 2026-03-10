@@ -1,5 +1,7 @@
 package orm
 
+import "github.com/tinywasm/fmt"
+
 // DB represents a database connection.
 // Consumers instantiate it via New().
 type DB struct {
@@ -69,7 +71,7 @@ func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
 type emptyModel struct{}
 
 func (e emptyModel) TableName() string { return "" }
-func (e emptyModel) Schema() []Field   { return nil }
+func (e emptyModel) Schema() []fmt.Field { return nil }
 func (e emptyModel) Values() []any     { return nil }
 func (e emptyModel) Pointers() []any   { return nil }
 

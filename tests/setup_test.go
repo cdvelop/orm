@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/tinywasm/fmt"
 	"github.com/tinywasm/orm"
 )
 
@@ -99,12 +100,12 @@ func (m *MockRows) Err() error {
 // MockModel is a mock implementation of the Model interface.
 type MockModel struct {
 	Table string
-	Sch   []orm.Field
+	Sch   []fmt.Field
 	Vals  []any
 }
 
 func (m MockModel) TableName() string   { return m.Table }
-func (m MockModel) Schema() []orm.Field { return m.Sch }
+func (m MockModel) Schema() []fmt.Field { return m.Sch }
 func (m MockModel) Values() []any       { return m.Vals }
 func (m MockModel) Pointers() []any     { return nil }
 

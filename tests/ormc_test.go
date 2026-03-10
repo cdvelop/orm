@@ -11,6 +11,80 @@ import (
 )
 
 func TestOrmc(t *testing.T) {
+	t.Run("formonly directive", func(t *testing.T) {
+		err := orm.NewOrmc().GenerateForStruct("LoginForm", "mock_generator_model.go")
+		if err != nil {
+			t.Fatalf("Failed to generate code for LoginForm: %v", err)
+		}
+
+		outFile := "mock_generator_model_orm.go"
+		contentBytes, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatalf("Failed to read generated file: %v", err)
+		}
+		defer os.Remove(outFile)
+
+		content := string(contentBytes)
+
+		// MUST generate Fielder methods and FormName
+		expectedStrings := []string{
+			"func (m *LoginForm) FormName() string {",
+			"func (m *LoginForm) Schema() []fmt.Field {",
+			"func (m *LoginForm) Values() []any {",
+			"func (m *LoginForm) Pointers() []any {",
+		}
+		for _, expected := range expectedStrings {
+			if !strings.Contains(content, expected) {
+				t.Errorf("Generated file missing expected string: %s", expected)
+			}
+		}
+
+		// MUST NOT generate TableName or ORM helpers
+		forbiddenStrings := []string{
+			"func (m *LoginForm) TableName() string",
+			"func ReadOneLoginForm",
+			"func ReadAllLoginForm",
+			"var LoginForm_ =",
+			"\"github.com/tinywasm/orm\"", // Import should be missing
+		}
+		for _, forbidden := range forbiddenStrings {
+			if strings.Contains(content, forbidden) {
+				t.Errorf("Generated file contains forbidden string: %s", forbidden)
+			}
+		}
+	})
+
+	t.Run("Form tags and FormName", func(t *testing.T) {
+		err := orm.NewOrmc().GenerateForStruct("UserForm", "mock_generator_model.go")
+		if err != nil {
+			t.Fatalf("Failed to generate code for UserForm: %v", err)
+		}
+
+		outFile := "mock_generator_model_orm.go"
+		contentBytes, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatalf("Failed to read generated file: %v", err)
+		}
+		defer os.Remove(outFile)
+
+		content := string(contentBytes)
+
+		expectedStrings := []string{
+			"func (m *UserForm) FormName() string {",
+			"return \"user_form\"",
+			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, Input: \"email\"}",
+			"{Name: \"password\", Type: fmt.FieldText, Input: \"password\"}",
+			"{Name: \"bio\", Type: fmt.FieldText, Input: \"textarea\"}",
+			"{Name: \"age\", Type: fmt.FieldInt, Input: \"-\"}",
+		}
+
+		for _, expected := range expectedStrings {
+			if !strings.Contains(content, expected) {
+				t.Errorf("Generated file missing expected string: %s\nContent:\n%s", expected, content)
+			}
+		}
+	})
+
 	t.Run("Generate User", func(t *testing.T) {
 		err := orm.NewOrmc().GenerateForStruct("User", "mock_generator_model.go")
 		if err != nil {
@@ -36,14 +110,16 @@ func TestOrmc(t *testing.T) {
 			"package tests",
 			"func (m *User) TableName() string {",
 			"return \"user\"",
-			"func (m *User) Schema() []orm.Field {",
-			"{Name: \"id\", Type: orm.TypeInt64, Constraints: orm.ConstraintPK}",
-			"{Name: \"first_name\", Type: orm.TypeText, Constraints: orm.ConstraintNotNull}",
-			"{Name: \"last_name\", Type: orm.TypeText, Constraints: orm.ConstraintNone}",
-			"{Name: \"email\", Type: orm.TypeText, Constraints: orm.ConstraintUnique}",
-			"{Name: \"score\", Type: orm.TypeFloat64, Constraints: orm.ConstraintNone}",
-			"{Name: \"is_active\", Type: orm.TypeBool, Constraints: orm.ConstraintNone}",
-			"{Name: \"avatar\", Type: orm.TypeBlob, Constraints: orm.ConstraintNone}",
+			"func (m *User) FormName() string {",
+			"return \"user\"",
+			"func (m *User) Schema() []fmt.Field {",
+			"{Name: \"id\", Type: fmt.FieldInt, PK: true}",
+			"{Name: \"first_name\", Type: fmt.FieldText, NotNull: true}",
+			"{Name: \"last_name\", Type: fmt.FieldText},",
+			"{Name: \"email\", Type: fmt.FieldText, Unique: true}",
+			"{Name: \"score\", Type: fmt.FieldFloat},",
+			"{Name: \"is_active\", Type: fmt.FieldBool},",
+			"{Name: \"avatar\", Type: fmt.FieldBlob},",
 			"func (m *User) Values() []any {",
 			"m.ID",
 			"m.FirstName",
@@ -89,8 +165,8 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			"{Name: \"id\", Type: orm.TypeText, Constraints: orm.ConstraintPK}",
-			"{Name: \"user_id\", Type: orm.TypeInt64, Constraints: orm.ConstraintNone, Ref: \"user\", RefColumn: \"id\"}",
+			"{Name: \"id\", Type: fmt.FieldText, PK: true}",
+			"{Name: \"user_id\", Type: fmt.FieldInt},",
 		}
 
 		for _, expected := range expectedStrings {
@@ -127,8 +203,8 @@ func TestOrmc(t *testing.T) {
 
 	t.Run("Bad AutoInc", func(t *testing.T) {
 		err := orm.NewOrmc().GenerateForStruct("BadAutoInc", "mock_generator_model.go")
-		if err == nil || !strings.Contains(err.Error(), "autoincrement not allowed on TypeText") {
-			t.Errorf("Expected error about autoincrement on TypeText, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "autoincrement not allowed on FieldText") {
+			t.Errorf("Expected error about autoincrement on FieldText, got %v", err)
 		}
 	})
 
@@ -170,26 +246,18 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			// int32 → TypeInt64
-			`{Name: "idnumeric", Type: orm.TypeInt64, Constraints: orm.ConstraintPK | orm.ConstraintNotNull}`,
-			// uint64 → TypeInt64
-			`{Name: "count_uint", Type: orm.TypeInt64, Constraints: orm.ConstraintNone}`,
-			// float32 → TypeFloat64
-			`{Name: "ratio_f32", Type: orm.TypeFloat64, Constraints: orm.ConstraintNone}`,
+			// int32 → FieldInt
+			`{Name: "idnumeric", Type: fmt.FieldInt, PK: true, NotNull: true}`,
+			// uint64 → FieldInt
+			`{Name: "count_uint", Type: fmt.FieldInt},`,
+			// float32 → FieldFloat
+			`{Name: "ratio_f32", Type: fmt.FieldFloat},`,
 		}
 
 		for _, expected := range expectedStrings {
 			if !strings.Contains(content, expected) {
 				t.Errorf("Generated file missing expected string: %s", expected)
 			}
-		}
-
-		// Bitmask correctness: ConstraintPK | ConstraintNotNull = 1 | 4 = 5
-		pkConstraint := orm.ConstraintPK
-		notNullConstraint := orm.ConstraintNotNull
-		combined := pkConstraint | notNullConstraint
-		if combined != 5 {
-			t.Errorf("Expected ConstraintPK | ConstraintNotNull = 5, got %d", combined)
 		}
 	})
 
@@ -208,12 +276,9 @@ func TestOrmc(t *testing.T) {
 
 		content := string(contentBytes)
 
-		// Ref present, RefColumn must be absent (empty string omitted from generated code)
-		if !strings.Contains(content, `Ref: "parent"`) {
-			t.Errorf("Expected Ref=parent in generated file")
-		}
-		if strings.Contains(content, "RefColumn") {
-			t.Errorf("RefColumn must be absent when ref tag has no column")
+		// Ref should NOT be in Input anymore
+		if strings.Contains(content, `Input: "ref=parent"`) {
+			t.Errorf("Ref should NOT be in Input anymore, got:\n%s", content)
 		}
 	})
 }
