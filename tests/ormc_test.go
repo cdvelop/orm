@@ -337,4 +337,46 @@ func TestOrmc(t *testing.T) {
 			t.Errorf("Generated file should NOT contain 'count' field (pointer to primitive):\n%s", content)
 		}
 	})
+
+	t.Run("JSON tags stage 1", func(t *testing.T) {
+		err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		outFile := "mock_generator_model_orm.go"
+		contentBytes, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatalf("failed to read: %v", err)
+		}
+		defer os.Remove(outFile)
+		content := string(contentBytes)
+		expected := []string{
+			`JSON: "id"`,
+			`JSON: "name"`,
+			`JSON: "email"`,
+			`JSON: "bio,omitempty"`,
+		}
+		for _, e := range expected {
+			if !strings.Contains(content, e) {
+				t.Errorf("missing: %s\nContent:\n%s", e, content)
+			}
+		}
+	})
+
+	t.Run("FieldStruct for nested struct stage 1", func(t *testing.T) {
+		err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		outFile := "mock_generator_model_orm.go"
+		contentBytes, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatalf("failed to read: %v", err)
+		}
+		defer os.Remove(outFile)
+		content := string(contentBytes)
+		if !strings.Contains(content, "fmt.FieldStruct") {
+			t.Errorf("expected FieldStruct in generated output, got:\n%s", content)
+		}
+	})
 }

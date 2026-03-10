@@ -70,6 +70,9 @@ const (
     ActionUpdate
     ActionDelete
     ActionReadAll
+    ActionCreateTable
+    ActionDropTable
+    ActionCreateDatabase
 )
 ```
 
@@ -82,7 +85,7 @@ A sealed value type. Consumers **must** construct via helpers (`Eq`, `Gt`, `Or`,
 ```go
 type Condition struct {
     field    string
-    operator string  // "=", "!=", ">", ">=", "<", "<=", "LIKE"
+    operator string  // "=", "!=", ">", ">=", "<", "<=", "LIKE", "IN"
     value    any
     logic    string  // "AND" (default) | "OR" — applies between this and the NEXT condition
 }
@@ -115,6 +118,7 @@ The central struct passed from the ORM core to the Compiler. Contains everything
 type Query struct {
     Action     Action
     Table      string
+    Database   string
     Columns    []string
     Values     []any
     Conditions []Condition
@@ -167,6 +171,7 @@ type Executor interface {
     Exec(query string, args ...any) error
     QueryRow(query string, args ...any) Scanner
     Query(query string, args ...any) (Rows, error)
+    Close() error
 }
 ```
 
@@ -216,6 +221,11 @@ func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error
 
 // Tx executes fn inside an atomic transaction.
 func (db *DB) Tx(fn func(tx *DB) error) error
+
+// DDL Operations
+func (db *DB) CreateTable(m Model) error
+func (db *DB) DropTable(m Model) error
+func (db *DB) CreateDatabase(name string) error
 ```
 
 #### Read Operations (Builder/Chain)
@@ -234,10 +244,11 @@ type QB struct {
     offset  int
 }
 
-func (q *QB) Where(conds ...Condition) *QB
+func (q *QB) Where(column string) *Clause
+func (q *QB) Or() *QB
 func (q *QB) Limit(n int) *QB
 func (q *QB) Offset(n int) *QB
-func (q *QB) OrderBy(col, dir string) *QB
+func (q *QB) OrderBy(column string) *OrderClause
 func (q *QB) GroupBy(cols ...string) *QB
 
 // ReadOne executes the query and fills m (passed to db.Query) via Model.Pointers().
@@ -259,6 +270,7 @@ func Gte(field string, val any) Condition  // field >= val
 func Lt(field string, val any) Condition   // field < val
 func Lte(field string, val any) Condition  // field <= val
 func Like(field string, val any) Condition // field LIKE val
+func In(field string, val any) Condition   // field IN (val)
 func Or(c Condition) Condition             // wraps c with Logic = "OR"
 ```
 

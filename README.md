@@ -11,6 +11,7 @@
 - [Architecture](docs/ARQUITECTURE.md)
 - [Skill](docs/SKILL.md)
 - [Plan](docs/PLAN.md)
+- [Improvement Roadmap](docs/IMPROVE.md)
 
 ## Quick Start
 
