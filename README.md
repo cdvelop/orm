@@ -10,6 +10,7 @@
 - [Why use this ORM?](docs/WHY.md)
 - [Architecture](docs/ARQUITECTURE.md)
 - [Skill](docs/SKILL.md)
+- [Plan](docs/PLAN.md)
 
 ## Quick Start
 

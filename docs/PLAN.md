@@ -1,131 +1,120 @@
-# PLAN: Consolidated ORM Fixes and Documentation
+# PLAN: ORM Tests and Documentation Completion
 
 ## Development Rules
 
-- **Standard Library Only:** No external assertion libraries.
-- **Testing Runner:** Use `gotest`.
-- **Documentation First:** Update docs before final publish.
-- **Publishing:** Use `gopush 'message'`.
+- **Testing Runner:** `gotest`
+- **Publishing:** `gopush 'message'`
 
 ## Context
 
-The `tinywasm/orm` has partially implemented the previous plan. 
-Specifically:
-- [x] Migration to `fmt.Field` and `fmt.FieldType`.
-- [x] Redefinition of `Model` interface.
-- [x] Support for `// ormc:formonly`.
-- [/] Parsing `form:` tags (implemented, but missing `json:` tag parsing and nested structs).
+Code was fully migrated. The following is confirmed implemented:
+- `field_ext.go`: `FieldExt` struct replacing `field_type.go`
+- `model.go`: `Model` embeds `fmt.Fielder` + `TableName()`
+- `ormc.go`: Parses `form:`, `json:` tags; detects `FieldStruct`; generates `FormName()`; supports `// ormc:formonly`
 
-This consolidated plan focuses on the missing pieces to complete the transition.
+**What remains:**
+1. Tests for `json:` tags and `FieldStruct` (mock models `UserWithJSON` and `WithPointers` already exist).
+2. `docs/SKILL.md` — still references old bitmask API; must be updated.
+3. `docs/ARQUITECTURE.md` — still references old `Columns()` and bitmask; must be updated.
+4. `README.md` — missing links and `PLAN.md` doc.
 
 ---
 
-## Stage 1: Complete `ormc` Tag Parsing and Field Detection
+## Stage 1: Add Missing Tests
 
-← None | Next → [Stage 2](#stage-2-documentation-updates)
+← None | Next → [Stage 2](#stage-2-update-skillmd)
 
-**Key principle:** `ormc` does NOT import `tinywasm/form`. It only reads the `form:` and `json:` struct tags and writes them into `fmt.Field.Input` / `fmt.Field.JSON` in the generated `Schema()`. Each downstream package reads these fields autonomously.
-
-### 1.1 Parse `form:` and `json:` tags in `ormc.go`
-
-In `ParseStruct`, for each field, read the `form` and `json` struct tags:
-
-**`form:` tag → `Field.Input`:**
-- `form:"-"` → `Field.Input = "-"` (form will skip this field).
-- `form:"email"` → `Field.Input = "email"` (form uses email input).
-- No `form` tag → `Field.Input = ""` (form uses name-based heuristic).
-
-**`json:` tag → `Field.JSON`:**
-- `json:"-"` → `Field.JSON = "-"` (json codec will skip this field).
-- `json:"email"` → `Field.JSON = "email"` (json codec uses "email" as key).
-- `json:"email,omitempty"` → `Field.JSON = "email,omitempty"` (copied verbatim).
-- No `json` tag → `Field.JSON = ""` (json codec uses `Field.Name` as key).
-
-**Nested struct fields → `FieldStruct`:**
-- If a field's Go type is a struct (not `time.Time`, not a slice), set `Type: fmt.FieldStruct`.
-- The generated `Values()` returns the struct value (must also implement `Fielder`).
-- The generated `Pointers()` returns a pointer to the struct field.
-
-### 1.2 Reference: generated `Schema()` example
-
-Input:
+Add to `tests/ormc_test.go` inside `TestOrmc`:
 
 ```go
-type User struct {
-    ID       string
-    Name     string                     `json:"name"`
-    Email    string `form:"email"       json:"email"`
-    Password string `form:"password"    json:"password"`
-    Bio      string `form:"textarea"    json:"bio,omitempty"`
-    Age      int64  `form:"-"           json:"age"`
-}
-```
-
-Expected generated `Schema()`:
-
-```go
-func (m *User) Schema() []fmt.Field {
-    return []fmt.Field{
-        {Name: "ID", Type: fmt.FieldText, PK: true},
-        {Name: "Name", Type: fmt.FieldText, NotNull: true, JSON: "name"},
-        {Name: "Email", Type: fmt.FieldText, NotNull: true, Input: "email", JSON: "email"},
-        {Name: "Password", Type: fmt.FieldText, Input: "password", JSON: "password"},
-        {Name: "Bio", Type: fmt.FieldText, Input: "textarea", JSON: "bio,omitempty"},
-        {Name: "Age", Type: fmt.FieldInt, Input: "-", JSON: "age"},
+t.Run("JSON tags", func(t *testing.T) {
+    err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
     }
-}
+    outFile := "mock_generator_model_orm.go"
+    contentBytes, err := os.ReadFile(outFile)
+    if err != nil {
+        t.Fatalf("failed to read: %v", err)
+    }
+    defer os.Remove(outFile)
+    content := string(contentBytes)
+    expected := []string{
+        `JSON: "id"`,
+        `JSON: "name"`,
+        `JSON: "email"`,
+        `JSON: "bio,omitempty"`,
+    }
+    for _, e := range expected {
+        if !strings.Contains(content, e) {
+            t.Errorf("missing: %s\nContent:\n%s", e, content)
+        }
+    }
+})
+
+t.Run("FieldStruct for nested struct", func(t *testing.T) {
+    err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+    outFile := "mock_generator_model_orm.go"
+    contentBytes, err := os.ReadFile(outFile)
+    if err != nil {
+        t.Fatalf("failed to read: %v", err)
+    }
+    defer os.Remove(outFile)
+    content := string(contentBytes)
+    if !strings.Contains(content, "fmt.FieldStruct") {
+        t.Errorf("expected FieldStruct in generated output, got:\n%s", content)
+    }
+})
 ```
 
-### 1.3 Tests
-
-- `TestOrmcJSONTag`: Parse a struct with `json:` tags, verify `Field.JSON` values in generated `Schema()`.
-- `TestOrmcJSONOmitEmpty`: Field with `json:"name,omitempty"` has `JSON: "name,omitempty"`.
-- `TestOrmcJSONExclusion`: Field with `json:"-"` has `JSON: "-"` in Schema.
-- `TestOrmcJSONNoTag`: Field without `json:` tag has `JSON: ""`.
-- `TestOrmcFieldStruct`: Nested struct field generates `Type: fmt.FieldStruct`.
-
----
-
-## Stage 2: Documentation Updates
-
-← [Stage 1](#stage-1-complete-ormc-tag-parsing-and-field-detection) | Next → [Stage 3](#stage-3-verification-and-publish)
-
-### 2.1 Update `docs/SKILL.md`
-- Remove references to bitmask constraints.
-- Use `fmt.Field` boolean flags (`PK`, `Unique`, `NotNull`, `AutoInc`).
-- Update `Model` interface definition.
-- Document `form:` and `json:` tag support in `ormc`.
-
-### 2.2 Update `docs/ARQUITECTURE.md`
-- Replace `Columns()` with `Schema() []fmt.Field`.
-- Update diagrams/descriptions to reflect `fmt.Fielder` embedding.
-
-### 2.3 Update `README.md`
-- Modernize the usage example.
-
----
-
-## Stage 3: Verification and Publish
-
-← [Stage 2](#stage-2-documentation-updates) | None →
-
-### 3.1 Run tests
 ```bash
 gotest
 ```
 
-### 3.2 Publish
-```bash
-gopush 'orm: consolidated migration to fmt.Field and ormc doc updates'
-```
+---
+
+## Stage 2: Update `docs/SKILL.md`
+
+← [Stage 1](#stage-1-add-missing-tests) | Next → [Stage 3](#stage-3-update-arquitecturemd)
+
+Replace the outdated content with the current API:
+
+- **Model Interface:** `fmt.Fielder` + `TableName()` (not `Columns()`).
+- **Schema Field Types:** Table using `fmt.FieldText`, `fmt.FieldInt`, etc. (not `TypeText`/`TypeInt64`).
+- **Constraints:** Bool fields (`PK`, `Unique`, `NotNull`, `AutoInc`) — **no bitmask**.
+- **`FieldExt`:** Document `Ref` and `RefColumn` for FK metadata.
+- **`FormName()`:** Generated for every struct; returns lowercase snake_case of struct name.
+- **`form:` and `json:` tags:** Document the tag → field mapping rules.
+- **`// ormc:formonly`:** Document the directive.
 
 ---
 
-## Summary of Remaining Changes
+## Stage 3: Update `docs/ARQUITECTURE.md`
 
-| File | Action |
-|------|--------|
-| `ormc.go` | Parse `json:` tags, detect nested structs, generate `JSON` and `FieldStruct` in `Schema()` |
-| `docs/SKILL.md` | Update to current API (bool flags, no bitmask) |
-| `docs/ARQUITECTURE.md` | Update to current API (`Schema()` vs `Columns()`) |
-| `README.md` | Update documentation |
+← [Stage 2](#stage-2-update-skillmd) | Next → [Stage 4](#stage-4-update-readmemd)
+
+- Update section 3.1 `Model` interface: Replace `Columns() []string` with `Schema() []fmt.Field`.
+- Remove bitmask `Constraint` references; use bool fields.
+- Note that `Model` now embeds `fmt.Fielder` from `tinywasm/fmt`.
+
+---
+
+## Stage 4: Update `README.md`
+
+← [Stage 3](#stage-3-update-arquitecturemd) | Next → [Stage 5](#stage-5-publish)
+
+- Add `PLAN.md` link if created.
+- Ensure all docs are linked.
+
+---
+
+## Stage 5: Publish
+
+← [Stage 4](#stage-4-update-readmemd) | None →
+
+```bash
+gopush 'orm: add json/FieldStruct tests, update SKILL and ARCHITECTURE docs'
+```
