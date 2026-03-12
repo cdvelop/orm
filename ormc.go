@@ -358,8 +358,7 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		buf.Write(Sprintf("\treturn \"%s\"\n", Convert(info.Name).SnakeLow().String()))
 		buf.Write("}\n\n")
 
-		buf.Write(Sprintf("func (m *%s) Schema() []fmt.Field {\n", info.Name))
-		buf.Write("\treturn []fmt.Field{\n")
+		buf.Write(Sprintf("var _schema%s = []fmt.Field{\n", info.Name))
 		for _, f := range info.Fields {
 			typeStr := "fmt.FieldText"
 			switch f.Type {
@@ -396,16 +395,9 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 			}
 			buf.Write("},\n")
 		}
-		buf.Write("\t}\n")
-		buf.Write("}\n\n")
+		buf.Write("\t}\n\n")
 
-		buf.Write(Sprintf("func (m *%s) Values() []any {\n", info.Name))
-		buf.Write("\treturn []any{\n")
-		for _, f := range info.Fields {
-			buf.Write(Sprintf("\t\tm.%s,\n", f.Name))
-		}
-		buf.Write("\t}\n")
-		buf.Write("}\n\n")
+		buf.Write(Sprintf("func (m *%s) Schema() []fmt.Field { return _schema%s }\n\n", info.Name, info.Name))
 
 		buf.Write(Sprintf("func (m *%s) Pointers() []any {\n", info.Name))
 		buf.Write("\treturn []any{\n")

@@ -113,7 +113,6 @@ type Address struct {
 }
 
 func (Address) Schema() []fmt.Field { return nil }
-func (Address) Values() []any       { return nil }
 func (Address) Pointers() []any     { return nil }
 
 type UserWithJSON struct {

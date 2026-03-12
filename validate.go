@@ -8,8 +8,8 @@ func validate(action Action, m Model) error {
 	}
 
 	if action == ActionCreate || action == ActionUpdate {
-		if len(m.Schema()) != len(m.Values()) {
-			return fmt.Err(ErrValidation, "columns and values length mismatch")
+		if len(m.Schema()) != len(m.Pointers()) {
+			return fmt.Err(ErrValidation, "schema and pointers length mismatch")
 		}
 	}
 

@@ -41,7 +41,6 @@ type Model interface {
 // fmt.Fielder provides:
 type Fielder interface {
     Schema() []fmt.Field   // ordered list of column metadata (name, type, constraints)
-    Values() []any         // field values, same order as Schema(). Used in Create/Update.
     Pointers() []any       // field pointers for scanning rows read from DB.
 }
 ```
@@ -53,7 +52,7 @@ type Fielder interface {
 - `Input string` — hint from `form:` struct tag (read by `tinywasm/form`)
 - `JSON string` — hint from `json:` struct tag (read by `tinywasm/json`)
 
-> `Values()` and `Pointers()` are only called by the Executor logic for the operations that require them.
+> `Pointers()` are only called by the Executor logic for the operations that require them.
 
 ---
 

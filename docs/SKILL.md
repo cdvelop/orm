@@ -24,7 +24,7 @@ go install github.com/tinywasm/orm/cmd/ormc@latest
 import "github.com/tinywasm/fmt"
 
 type Model interface {
-    fmt.Fielder           // Schema() []fmt.Field + Values() []any + Pointers() []any
+    fmt.Fielder           // Schema() []fmt.Field + Pointers() []any
     TableName() string
 }
 ```
@@ -34,7 +34,6 @@ type Model interface {
 ```go
 type Fielder interface {
     Schema() []fmt.Field
-    Values() []any
     Pointers() []any
 }
 ```
@@ -60,7 +59,7 @@ type Fielder interface {
 | `Input string` | `form:"email"` | Hint for form rendering; `form:"-"` = skip |
 | `JSON string` | `json:"name"` | Hint for JSON codec; `json:"-"` = skip |
 | FK reference | `db:"ref=table"` or `db:"ref=table:column"` | stored in `FieldExt.Ref` + `FieldExt.RefColumn` |
-| Ignore field | `db:"-"` | Silently excluded from `Schema()`, `Values()`, `Pointers()` |
+| Ignore field | `db:"-"` | Silently excluded from `Schema()`, `Pointers()` |
 
 > **String PKs:** must be set by caller via `github.com/tinywasm/unixid` before calling `db.Create()`. The ORM does not generate IDs.
 
@@ -103,7 +102,6 @@ Use a single `//go:generate` at the project root — **not** per struct:
 - `func (m *T) TableName() string` *(only if NOT already declared in source)*
 - `func (m *T) FormName() string` — returns lowercase snake_case of the struct name
 - `func (m *T) Schema() []fmt.Field`
-- `func (m *T) Values() []any`
 - `func (m *T) Pointers() []any`
 - `T_` metadata struct with typed column name constants
 - `ReadOneT(qb *orm.QB, model *T) (*T, error)`
@@ -135,7 +133,7 @@ type LoginRequest struct {
 }
 ```
 
-Generated methods: `FormName()`, `Schema()`, `Values()`, `Pointers()`.  
+Generated methods: `FormName()`, `Schema()`, `Pointers()`.
 **Not generated:** `TableName()`, `ReadOne*`, `ReadAll*`, `T_` descriptor.
 
 ### Programmatic usage (`ormc` embedded in another tool)

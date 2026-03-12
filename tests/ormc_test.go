@@ -30,7 +30,6 @@ func TestOrmc(t *testing.T) {
 		expectedStrings := []string{
 			"func (m *LoginForm) FormName() string {",
 			"func (m *LoginForm) Schema() []fmt.Field {",
-			"func (m *LoginForm) Values() []any {",
 			"func (m *LoginForm) Pointers() []any {",
 		}
 		for _, expected := range expectedStrings {
@@ -120,10 +119,6 @@ func TestOrmc(t *testing.T) {
 			"{Name: \"score\", Type: fmt.FieldFloat},",
 			"{Name: \"is_active\", Type: fmt.FieldBool},",
 			"{Name: \"avatar\", Type: fmt.FieldBlob},",
-			"func (m *User) Values() []any {",
-			"m.ID",
-			"m.FirstName",
-			"m.LastName",
 			"func (m *User) Pointers() []any {",
 			"&m.ID",
 			"&m.FirstName",

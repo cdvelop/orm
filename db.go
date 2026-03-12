@@ -31,7 +31,7 @@ func (db *DB) Create(m Model) error {
 		Action:  ActionCreate,
 		Table:   m.TableName(),
 		Columns: columns,
-		Values:  m.Values(),
+		Values:  fmt.ReadValues(schema, m.Pointers()),
 	}
 	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
@@ -57,7 +57,7 @@ func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
 		Action:     ActionUpdate,
 		Table:      m.TableName(),
 		Columns:    columns,
-		Values:     m.Values(),
+		Values:     fmt.ReadValues(schema, m.Pointers()),
 		Conditions: conds,
 	}
 	plan, err := db.compiler.Compile(q, m)
@@ -72,7 +72,6 @@ type emptyModel struct{}
 
 func (e emptyModel) TableName() string { return "" }
 func (e emptyModel) Schema() []fmt.Field { return nil }
-func (e emptyModel) Values() []any     { return nil }
 func (e emptyModel) Pointers() []any   { return nil }
 
 // CreateTable creates a new table for the given model.

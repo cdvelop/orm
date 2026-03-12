@@ -106,8 +106,13 @@ type MockModel struct {
 
 func (m MockModel) TableName() string   { return m.Table }
 func (m MockModel) Schema() []fmt.Field { return m.Sch }
-func (m MockModel) Values() []any       { return m.Vals }
-func (m MockModel) Pointers() []any     { return nil }
+func (m MockModel) Pointers() []any     {
+	ptrs := make([]any, len(m.Vals))
+	for i := range m.Vals {
+		ptrs[i] = &m.Vals[i]
+	}
+	return ptrs
+}
 
 // MockTxExecutor ...
 type MockTxExecutor struct {
