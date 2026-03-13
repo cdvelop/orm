@@ -38,7 +38,10 @@ go install github.com/tinywasm/orm/cmd/ormc@latest
 ormc
 ```
 
-This generates `modules/user/model_orm.go` with the `Model` implementation and typed helpers.
+This generates `modules/user/model_orm.go` with the `Model` implementation and typed helpers. 
+
+> [!TIP]
+> **Automatic Sync**: `ormc` automatically runs `go get` for required dependencies and `go mod tidy` if a `go.mod` is detected.
 
 ### 3. Use it
 
@@ -60,7 +63,7 @@ func GetActiveUsers(db *orm.DB) ([]*user.User, error) {
 ## Features
 
 - **Standard Library Only**: No external assertion libraries or heavy dependencies.
-- **Isomorphic**: Works identically in Go (backend) and WASM (frontend).
+- **Isomorphic & Agnostic**: Works identically in Go (backend) and WASM (frontend). Generated code contains no build tags.
 - **Interface over Reflection**: Zero use of `reflect` at runtime for maximum performance.
 - **Typed Schema**: Uses `github.com/tinywasm/fmt` for deterministic field mapping.
-- **Boilerplate Generator**: `ormc` CLI tool automates the `Model` interface implementation.
+- **Boilerplate Generator**: `ormc` CLI tool automates the `Model` interface implementation and handles dependencies.
