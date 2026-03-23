@@ -16,7 +16,7 @@
 Update `go.mod` to the new `tinywasm/fmt` version (Field v3):
 
 ```bash
-go get github.com/tinywasm/fmt@latest
+go get github.com/tinywasm/fmt@v0.19.0
 ```
 
 ## Context
