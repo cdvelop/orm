@@ -99,9 +99,14 @@ func (m *MockRows) Err() error {
 
 // MockModel is a mock implementation of the Model interface.
 type MockModel struct {
-	Table string
-	Sch   []fmt.Field
-	Vals  []any
+	Table    string
+	Sch      []fmt.Field
+	Vals     []any
+	ValidErr error
+}
+
+func (m *MockModel) Validate() error {
+	return m.ValidErr
 }
 
 func (m MockModel) TableName() string   { return m.Table }

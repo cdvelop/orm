@@ -94,17 +94,17 @@ type MockChild struct {
 
 type UserForm struct {
 	ID       string `db:"pk"`
-	Name     string
-	Email    string `db:"not_null" form:"email"`
-	Password string `form:"password"`
-	Bio      string `form:"textarea"`
-	Age      int64  `form:"-"`
+	Name     string `validate:"name,min=2,max=100"`
+	Email    string `db:"not_null" validate:"required,email" json:"email,omitempty"`
+	Password string `validate:"required,min=8"`
+	Bio      string `validate:"tilde,spaces" json:"bio,omitempty"`
+	Age      int64
 }
 
 // ormc:formonly
 type LoginForm struct {
-	Email    string `form:"email"`
-	Password string `form:"password"`
+	Email    string `validate:"required,email"`
+	Password string `validate:"required"`
 }
 
 type Address struct {

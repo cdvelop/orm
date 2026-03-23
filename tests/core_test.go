@@ -187,16 +187,15 @@ func RunCoreTests(t *testing.T) {
 	t.Run("Validation Error Create", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
-			Table: "user",
-			Sch:   []fmt.Field{{Name: "col1"}},
-			Vals:  []any{1, 2}, // Mismatch
+			Table:    "user",
+			Sch:      []fmt.Field{{Name: "col1"}},
+			Vals:     []any{1},
+			ValidErr: errors.New("custom validation error"),
 		}
 
 		err := db.Create(model)
-		if err == nil {
-			t.Error("Expected error, got nil")
-		} else if !strings.Contains(err.Error(), orm.ErrValidation.Error()) {
-			t.Errorf("Expected error containing '%s', got '%v'", orm.ErrValidation.Error(), err)
+		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
+			t.Errorf("Expected custom validation error, got %v", err)
 		}
 	})
 
@@ -204,16 +203,15 @@ func RunCoreTests(t *testing.T) {
 	t.Run("Validation Error Update", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
-			Table: "user",
-			Sch:   []fmt.Field{{Name: "col1"}},
-			Vals:  []any{1, 2}, // Mismatch
+			Table:    "user",
+			Sch:      []fmt.Field{{Name: "col1"}},
+			Vals:     []any{1},
+			ValidErr: errors.New("custom validation error"),
 		}
 
 		err := db.Update(model, orm.Eq("id", 1))
-		if err == nil {
-			t.Error("Expected error, got nil")
-		} else if !strings.Contains(err.Error(), orm.ErrValidation.Error()) {
-			t.Errorf("Expected error containing '%s', got '%v'", orm.ErrValidation.Error(), err)
+		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
+			t.Errorf("Expected custom validation error, got %v", err)
 		}
 	})
 

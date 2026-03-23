@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	. "github.com/tinywasm/fmt"
 )
@@ -25,8 +26,16 @@ type FieldInfo struct {
 	RefColumn  string
 	IsPK       bool
 	GoType     string
-	Input      string
-	JSON       string
+	OmitEmpty  bool
+	// Permitted config — populated from validate:"..." tag
+	Letters bool
+	Tilde   bool
+	Numbers bool
+	Spaces  bool
+	Extra   []rune
+	Minimum int
+	Maximum int
+	Format  string // "email", "phone", etc. (triggers validator call generation)
 }
 
 // SliceFieldInfo records a slice-of-struct field found in a parent struct.
@@ -157,18 +166,18 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		dbTag := ""
-		formTag := ""
 		jsonTag := ""
+		validateTag := ""
 		if field.Tag != nil {
 			tagVal := Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
 			parts := Convert(tagVal).Split(" ")
 			for _, p := range parts {
 				if HasPrefix(p, "db:\"") {
 					dbTag = Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
-				} else if HasPrefix(p, "form:\"") {
-					formTag = Convert(p).TrimPrefix(`form:"`).TrimSuffix(`"`).String()
 				} else if HasPrefix(p, "json:\"") {
 					jsonTag = Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
+				} else if HasPrefix(p, "validate:\"") {
+					validateTag = Convert(p).TrimPrefix(`validate:"`).TrimSuffix(`"`).String()
 				}
 			}
 		}
@@ -285,7 +294,17 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			}
 		}
 
-		info.Fields = append(info.Fields, FieldInfo{
+		omitEmpty := false
+		if jsonTag != "" {
+			parts := Convert(jsonTag).Split(",")
+			for _, p := range parts {
+				if p == "omitempty" {
+					omitEmpty = true
+				}
+			}
+		}
+
+		fi := FieldInfo{
 			Name:       fieldName,
 			ColumnName: colName,
 			Type:       fieldType,
@@ -297,12 +316,56 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			RefColumn:  refCol,
 			IsPK:       fieldIsPK,
 			GoType:     typeStr,
-			Input:      formTag,
-			JSON:       jsonTag,
-		})
+			OmitEmpty:  omitEmpty,
+		}
+
+		if validateTag != "" {
+			parseValidateTag(validateTag, &fi)
+		}
+
+		info.Fields = append(info.Fields, fi)
 	}
 
 	return info, nil
+}
+
+// parseValidateTag maps validate:"..." rules to FieldInfo Permitted fields.
+func parseValidateTag(tag string, fi *FieldInfo) {
+	parts := Convert(tag).Split(",")
+	for _, v := range parts {
+		switch {
+		case v == "required":
+			fi.NotNull = true
+		case v == "email":
+			fi.Format = "email"
+		case v == "phone":
+			fi.Format = "phone"
+		case v == "ip":
+			fi.Format = "ip"
+		case v == "rut":
+			fi.Format = "rut"
+		case v == "date":
+			fi.Format = "date"
+		case v == "name":
+			fi.Letters = true
+			fi.Tilde = true
+			fi.Spaces = true
+		case v == "letters":
+			fi.Letters = true
+		case v == "numbers":
+			fi.Numbers = true
+		case v == "tilde":
+			fi.Tilde = true
+		case v == "spaces":
+			fi.Spaces = true
+		case HasPrefix(v, "min="):
+			n, _ := Convert(v).TrimPrefix("min=").Int64()
+			fi.Minimum = int(n)
+		case HasPrefix(v, "max="):
+			n, _ := Convert(v).TrimPrefix("max=").Int64()
+			fi.Maximum = int(n)
+		}
+	}
 }
 
 // GenerateForStruct reads the Go File and generates the ORM implementations for a given struct name.
@@ -317,6 +380,64 @@ func (o *Ormc) GenerateForStruct(structName string, goFile string) error {
 	return o.GenerateForFile([]StructInfo{info}, goFile)
 }
 
+func capitalize(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[0:1]) + s[1:]
+}
+
+func writePermittedFields(buf *Conv, f FieldInfo) {
+	// Use nested Permitted literal
+	hasPerm := f.Letters || f.Tilde || f.Numbers || f.Spaces ||
+		len(f.Extra) > 0 || f.Minimum > 0 || f.Maximum > 0
+
+	if !hasPerm {
+		return
+	}
+
+	buf.Write(", Permitted: fmt.Permitted{")
+	parts := []string{}
+	if f.Letters {
+		parts = append(parts, "Letters: true")
+	}
+	if f.Tilde {
+		parts = append(parts, "Tilde: true")
+	}
+	if f.Numbers {
+		parts = append(parts, "Numbers: true")
+	}
+	if f.Spaces {
+		parts = append(parts, "Spaces: true")
+	}
+	if f.Minimum > 0 {
+		parts = append(parts, Sprintf("Minimum: %d", f.Minimum))
+	}
+	if f.Maximum > 0 {
+		parts = append(parts, Sprintf("Maximum: %d", f.Maximum))
+	}
+	if len(f.Extra) > 0 {
+		buf2 := "Extra: []rune{"
+		for i, r := range f.Extra {
+			if i > 0 {
+				buf2 += ", "
+			}
+			buf2 += Sprintf("'%s'", string(r))
+		}
+		buf2 += "}"
+		parts = append(parts, buf2)
+	}
+
+	// Join parts
+	for i, p := range parts {
+		if i > 0 {
+			buf.Write(", ")
+		}
+		buf.Write(p)
+	}
+	buf.Write("}")
+}
+
 // GenerateForFile writes ORM implementations for all infos into one file.
 func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	if len(infos) == 0 {
@@ -329,10 +450,15 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	buf.Write(Sprintf("package %s\n\n", infos[0].PackageName))
 
 	hasModel := false
+	hasFormat := false
 	for _, info := range infos {
 		if !info.FormOnly {
 			hasModel = true
-			break
+		}
+		for _, f := range info.Fields {
+			if f.Format != "" {
+				hasFormat = true
+			}
 		}
 	}
 
@@ -340,6 +466,9 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	buf.Write("\t\"github.com/tinywasm/fmt\"\n")
 	if hasModel {
 		buf.Write("\t\"github.com/tinywasm/orm\"\n")
+	}
+	if hasFormat {
+		buf.Write("\t\"github.com/tinywasm/form\"\n")
 	}
 	buf.Write(")\n\n")
 
@@ -386,12 +515,10 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 			if f.AutoInc {
 				buf.Write(", AutoInc: true")
 			}
-			if f.Input != "" {
-				buf.Write(Sprintf(", Input: \"%s\"", f.Input))
+			if f.OmitEmpty {
+				buf.Write(", OmitEmpty: true")
 			}
-			if f.JSON != "" {
-				buf.Write(Sprintf(", JSON: \"%s\"", f.JSON))
-			}
+			writePermittedFields(buf, f)
 			buf.Write("},\n")
 		}
 		buf.Write("\t}\n\n")
@@ -405,6 +532,29 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		}
 		buf.Write("\t}\n")
 		buf.Write("}\n\n")
+
+		hasValidation := false
+		for _, f := range info.Fields {
+			if f.NotNull || f.Letters || f.Numbers || f.Tilde || f.Spaces ||
+				len(f.Extra) > 0 || f.Minimum > 0 || f.Maximum > 0 || f.Format != "" {
+				hasValidation = true
+				break
+			}
+		}
+
+		if hasValidation {
+			buf.Write(Sprintf("func (m *%s) Validate() error {\n", info.Name))
+			buf.Write("\tif err := fmt.ValidateFielder(m); err != nil { return err }\n")
+			for _, f := range info.Fields {
+				if f.Format != "" {
+					// E.g. "email" -> "ValidateEmail"
+					validatorName := "form.Validate" + capitalize(f.Format)
+					buf.Write(Sprintf("\tif err := %s(m.%s); err != nil { return err }\n", validatorName, f.Name))
+				}
+			}
+			buf.Write("\treturn nil\n")
+			buf.Write("}\n\n")
+		}
 
 		if !info.FormOnly {
 			// Metadata Descriptors
@@ -565,7 +715,7 @@ func (o *Ormc) Run() error {
 	// Pass 4: sync dependencies
 	if _, err := os.Stat(filepath.Join(o.rootDir, "go.mod")); err == nil {
 		o.log("Syncing dependencies...")
-		if err := o.exec("go", "get", "github.com/tinywasm/fmt", "github.com/tinywasm/orm"); err != nil {
+		if err := o.exec("go", "get", "github.com/tinywasm/fmt", "github.com/tinywasm/orm", "github.com/tinywasm/form"); err != nil {
 			return Err(err, "failed to get dependencies")
 		}
 		if err := o.exec("go", "mod", "tidy"); err != nil {

@@ -56,8 +56,8 @@ type Fielder interface {
 | `Unique bool` | `db:"unique"` | |
 | `NotNull bool` | `db:"not_null"` | |
 | `AutoInc bool` | `db:"autoincrement"` | Numeric fields only |
-| `Input string` | `form:"email"` | Hint for form rendering; `form:"-"` = skip |
-| `JSON string` | `json:"name"` | Hint for JSON codec; `json:"-"` = skip |
+| `OmitEmpty bool` | `json:",omitempty"` | Propagated from `json` tag |
+| `Permitted fmt.Permitted` | `validate:"..."` | Validation rules for characters and bounds |
 | FK reference | `db:"ref=table"` or `db:"ref=table:column"` | stored in `FieldExt.Ref` + `FieldExt.RefColumn` |
 | Ignore field | `db:"-"` | Silently excluded from `Schema()`, `Pointers()` |
 
@@ -107,19 +107,18 @@ Use a single `//go:generate` at the project root — **not** per struct:
 - `ReadOneT(qb *orm.QB, model *T) (*T, error)`
 - `ReadAllT(qb *orm.QB) ([]*T, error)`
 
-### `form:` and `json:` tags
+### `validate:` and `json:` tags
 
 `ormc` reads struct tags and propagates them to `fmt.Field`:
 
 | Tag | Field | Generated |
 |---|---|---|
-| `form:"email"` | `Input = "email"` | `Input: "email"` |
-| `form:"-"` | `Input = "-"` | `Input: "-"` (form skips it) |
-| `json:"name"` | `JSON = "name"` | `JSON: "name"` |
-| `json:"bio,omitempty"` | `JSON = "bio,omitempty"` | `JSON: "bio,omitempty"` |
-| `json:"-"` | `JSON = "-"` | `JSON: "-"` (json skips it) |
+| `validate:"required"` | `NotNull = true` | `NotNull: true` |
+| `validate:"email"` | `Format = "email"` | Injects `form.ValidateEmail` call in `Validate()` |
+| `validate:"min=2"` | `Permitted.Minimum = 2` | `Permitted: {Minimum: 2}` |
+| `json:"bio,omitempty"` | `OmitEmpty = true` | `OmitEmpty: true` |
 
-No `form` or `json` dependencies are imported or generated. The downstream `form` and `json` packages read `Field.Input` / `Field.JSON` autonomously.
+`ormc` generates a composite `Validate()` method that invokes `fmt.ValidateFielder(m)` plus any format validators requested by the `validate:` tag.
 
 ### `// ormc:formonly` directive
 

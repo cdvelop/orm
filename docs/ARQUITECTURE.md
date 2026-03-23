@@ -49,8 +49,8 @@ type Fielder interface {
 - `Name string` — column name (snake_case)
 - `Type fmt.FieldType` — `FieldText`, `FieldInt`, `FieldFloat`, `FieldBool`, `FieldBlob`, `FieldStruct`
 - `PK bool`, `Unique bool`, `NotNull bool`, `AutoInc bool` — schema constraints
-- `Input string` — hint from `form:` struct tag (read by `tinywasm/form`)
-- `JSON string` — hint from `json:` struct tag (read by `tinywasm/json`)
+- `OmitEmpty bool` — hint from `json:",omitempty"` struct tag (read by `tinywasm/json`)
+- `Permitted Permitted` — validation rules from `validate:` struct tag (read by `fmt.ValidateFielder`)
 
 > `Pointers()` are only called by the Executor logic for the operations that require them.
 
