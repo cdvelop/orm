@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	. "github.com/tinywasm/fmt"
 )
@@ -113,7 +112,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 							structFound = true
 							if genDecl.Doc != nil {
 								for _, comment := range genDecl.Doc.List {
-									if strings.Contains(comment.Text, "ormc:formonly") {
+									if Contains(comment.Text, "ormc:formonly") {
 										formOnly = true
 										break
 									}
@@ -230,7 +229,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			fieldType = FieldBlob
 		default:
 			// If it's a struct (but not time.Time, not slice, not chan), map to FieldStruct
-			if typeStr != "" && !strings.Contains(typeStr, "[") && !strings.Contains(typeStr, "chan ") {
+			if typeStr != "" && !Contains(typeStr, "[") && !Contains(typeStr, "chan ") {
 				fieldType = FieldStruct
 			} else {
 				o.log(Sprintf("Warning: unsupported type %s for field %s.%s; skipping. Add db:\"-\" to suppress.", typeStr, structName, fieldName))
