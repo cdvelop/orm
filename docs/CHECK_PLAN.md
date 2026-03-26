@@ -1,4 +1,4 @@
-# PLAN: orm — Validate(action byte) generado por ormc
+# PLAN: orm — Validate(action byte) generado por ormc [COMPLETED]
 
 ← [README](../README.md) | Depende de: [fmt PLAN.md](../../fmt/docs/PLAN.md)
 

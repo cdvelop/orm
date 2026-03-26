@@ -10,7 +10,7 @@ go install github.com/tinywasm/orm/cmd/ormc@latest
 ## Public API Contract
 
 ### Interfaces
-- `Model`: `fmt.Fielder` + `TableName()` *(auto-implemented by `ormc`)*
+- `Model`: `fmt.Model` *(auto-implemented by `ormc`)*
 - `Compiler`: `Compile(Query, Model) (Plan, error)`
 - `Executor`: `Exec()`, `QueryRow()`, `Query()`, `Close()`
 - `TxExecutor`: `BeginTx()`
@@ -18,14 +18,14 @@ go install github.com/tinywasm/orm/cmd/ormc@latest
 
 ### Model Interface
 
-`Model` embeds `fmt.Fielder` and adds a table name:
+`Model` (found in `fmt`) embeds `fmt.Fielder` and adds a model name:
 
 ```go
 import "github.com/tinywasm/fmt"
 
 type Model interface {
     fmt.Fielder           // Schema() []fmt.Field + Pointers() []any
-    TableName() string
+    ModelName() string
 }
 ```
 
@@ -99,10 +99,10 @@ Use a single `//go:generate` at the project root — **not** per struct:
 
 ### For every struct, `ormc` generates
 
-- `func (m *T) TableName() string` *(only if NOT already declared in source)*
-- `func (m *T) FormName() string` — returns lowercase snake_case of the struct name
+- `func (m *T) ModelName() string` *(only if NOT already declared in source)*
 - `func (m *T) Schema() []fmt.Field`
 - `func (m *T) Pointers() []any`
+- `func (m *T) Validate(action byte) error`
 - `T_` metadata struct with typed column name constants
 - `ReadOneT(qb *orm.QB, model *T) (*T, error)`
 - `ReadAllT(qb *orm.QB) ([]*T, error)`
@@ -118,11 +118,11 @@ Use a single `//go:generate` at the project root — **not** per struct:
 | `validate:"min=2"` | `Permitted.Minimum = 2` | `Permitted: {Minimum: 2}` |
 | `json:"bio,omitempty"` | `OmitEmpty = true` | `OmitEmpty: true` |
 
-`ormc` generates a composite `Validate()` method that invokes `fmt.ValidateFielder(m)` plus any format validators requested by the `validate:` tag.
+`ormc` generates a composite `Validate(action byte)` method that invokes `fmt.ValidateFields(action, m)` plus any format validators requested by the `validate:` tag. Format validators only run if `action` is `'c'` (create) or `'u'` (update).
 
 ### `// ormc:formonly` directive
 
-Structs annotated with `// ormc:formonly` implement `fmt.Fielder` but NOT `orm.Model`:
+Structs annotated with `// ormc:formonly` implement `fmt.Fielder` but NOT `fmt.Model`:
 
 ```go
 // ormc:formonly
@@ -132,8 +132,8 @@ type LoginRequest struct {
 }
 ```
 
-Generated methods: `FormName()`, `Schema()`, `Pointers()`.
-**Not generated:** `TableName()`, `ReadOne*`, `ReadAll*`, `T_` descriptor.
+Generated methods: `Schema()`, `Pointers()`, `Validate(action byte)`.
+**Not generated:** `ModelName()`, `ReadOne*`, `ReadAll*`, `T_` descriptor.
 
 ### Programmatic usage (`ormc` embedded in another tool)
 

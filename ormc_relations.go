@@ -5,7 +5,7 @@ package orm
 import (
 	"sort"
 
-	. "github.com/tinywasm/fmt"
+	"github.com/tinywasm/fmt"
 )
 
 // RelationInfo describes a one-to-many relation loader to generate.
@@ -34,13 +34,13 @@ func (o *Ormc) ResolveRelations(all map[string]StructInfo) {
 			childStructName := sliceField.ElemType
 			childInfo, ok := all[childStructName]
 			if !ok {
-				o.log(Sprintf("Warning: relation field %s.%s points to unknown struct %s; skipping", parentName, sliceField.Name, childStructName))
+				o.log(fmt.Sprintf("Warning: relation field %s.%s points to unknown struct %s; skipping", parentName, sliceField.Name, childStructName))
 				continue
 			}
 
-			fkField := findFKField(childInfo, parentInfo.TableName)
+			fkField := findFKField(childInfo, parentInfo.ModelName)
 			if fkField == nil {
-				o.log(Sprintf("Warning: no FK found in child %s pointing to parent table %s (from %s.%s); skipping relation loader", childStructName, parentInfo.TableName, parentName, sliceField.Name))
+				o.log(fmt.Sprintf("Warning: no FK found in child %s pointing to parent model %s (from %s.%s); skipping relation loader", childStructName, parentInfo.ModelName, parentName, sliceField.Name))
 				continue
 			}
 
@@ -48,7 +48,7 @@ func (o *Ormc) ResolveRelations(all map[string]StructInfo) {
 				ChildStruct: childStructName,
 				FKField:     fkField.Name,
 				FKColumn:    fkField.ColumnName,
-				LoaderName:  Sprintf("ReadAll%sBy%s", childStructName, fkField.Name),
+				LoaderName:  fmt.Sprintf("ReadAll%sBy%s", childStructName, fkField.Name),
 				FKFieldType: fkField.GoType,
 			}
 			childInfo.Relations = append(childInfo.Relations, rel)

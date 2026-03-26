@@ -8,12 +8,12 @@ import (
 // MockCompiler captures the query and returns a predefined plan.
 type MockCompiler struct {
 	LastQuery  orm.Query
-	LastModel  orm.Model
+	LastModel  fmt.Model
 	ReturnPlan orm.Plan
 	ReturnErr  error
 }
 
-func (m *MockCompiler) Compile(q orm.Query, model orm.Model) (orm.Plan, error) {
+func (m *MockCompiler) Compile(q orm.Query, model fmt.Model) (orm.Plan, error) {
 	m.LastQuery = q
 	m.LastModel = model
 	if m.ReturnPlan.Query == "" {
@@ -105,11 +105,11 @@ type MockModel struct {
 	ValidErr error
 }
 
-func (m *MockModel) Validate() error {
+func (m *MockModel) Validate(action byte) error {
 	return m.ValidErr
 }
 
-func (m MockModel) TableName() string   { return m.Table }
+func (m MockModel) ModelName() string   { return m.Table }
 func (m MockModel) Schema() []fmt.Field { return m.Sch }
 func (m MockModel) Pointers() []any     {
 	ptrs := make([]any, len(m.Vals))

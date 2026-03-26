@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/tinywasm/fmt"
@@ -146,11 +145,11 @@ func RunCoreTests(t *testing.T) {
 
 		newCalled := 0
 		onRowCalled := 0
-		newFunc := func() orm.Model {
+		newFunc := func() fmt.Model {
 			newCalled++
 			return &MockModel{}
 		}
-		onRow := func(m orm.Model) {
+		onRow := func(m fmt.Model) {
 			onRowCalled++
 		}
 
@@ -183,8 +182,8 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 6. Test Validation Error (Create)
-	t.Run("Validation Error Create", func(t *testing.T) {
+	// 6. Test Validation (Verify db.Create no longer calls Validate)
+	t.Run("Create No Longer Calls Validate", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table:    "user",
@@ -194,13 +193,13 @@ func RunCoreTests(t *testing.T) {
 		}
 
 		err := db.Create(model)
-		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
-			t.Errorf("Expected custom validation error, got %v", err)
+		if err != nil {
+			t.Errorf("Expected no validation error from db.Create, got %v", err)
 		}
 	})
 
-	// 7. Test Validation Error (Update)
-	t.Run("Validation Error Update", func(t *testing.T) {
+	// 7. Test Validation (Verify db.Update no longer calls Validate)
+	t.Run("Update No Longer Calls Validate", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table:    "user",
@@ -210,8 +209,8 @@ func RunCoreTests(t *testing.T) {
 		}
 
 		err := db.Update(model, orm.Eq("id", 1))
-		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
-			t.Errorf("Expected custom validation error, got %v", err)
+		if err != nil {
+			t.Errorf("Expected no validation error from db.Update, got %v", err)
 		}
 	})
 
@@ -418,7 +417,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec.ReturnQueryRows = &MockRows{Count: 0}
 		db.Query(model).
 			Limit(5).
-			ReadAll(func() orm.Model { return nil }, func(orm.Model) {})
+			ReadAll(func() fmt.Model { return nil }, func(fmt.Model) {})
 
 		if mockCompiler.LastQuery.Limit != 5 {
 			t.Errorf("Expected Limit 5, got %d", mockCompiler.LastQuery.Limit)
@@ -555,8 +554,8 @@ func RunCoreTests(t *testing.T) {
 		}
 		// ReadAll Scan Error
 		db5 := orm.New(&MockExecutor{ReturnQueryRows: &MockRows{Count: 1, ScanErr: errors.New("scan err")}}, &MockCompiler{})
-		f := func() orm.Model { return &MockModel{} }
-		e := func(m orm.Model) {}
+		f := func() fmt.Model { return &MockModel{} }
+		e := func(m fmt.Model) {}
 		if err := db5.Query(model).ReadAll(f, e); err == nil || err.Error() != "scan err" {
 			t.Errorf("Expected scan err, got %v", err)
 		}

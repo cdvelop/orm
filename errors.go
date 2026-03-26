@@ -8,7 +8,7 @@ var ErrNotFound = fmt.Err("record", "not", "found")
 // ErrValidation is returned when validate() finds a mismatch.
 var ErrValidation = fmt.Err("error", "validation")
 
-// ErrEmptyTable is returned when TableName() returns an empty string.
+// ErrEmptyTable is returned when ModelName() returns an empty string.
 var ErrEmptyTable = fmt.Err("name", "table", "empty")
 
 // ErrNoTxSupport is returned by DB.Tx() when the executor does not implement TxExecutor.
