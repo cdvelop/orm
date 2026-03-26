@@ -19,6 +19,11 @@ func New(exec Executor, compiler Compiler) *DB {
 
 // Create inserts a new model into the database.
 func (db *DB) Create(m Model) error {
+	if v, ok := m.(fmt.Validator); ok {
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := validate(ActionCreate, m); err != nil {
 		return err
 	}
@@ -54,6 +59,11 @@ func (db *DB) Create(m Model) error {
 // Providing zero conditions is a compile-time error — there is no variadic
 // fallback — preventing accidental full-table UPDATE statements.
 func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
+	if v, ok := m.(fmt.Validator); ok {
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
 	if err := validate(ActionUpdate, m); err != nil {
 		return err
 	}

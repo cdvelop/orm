@@ -53,7 +53,7 @@ func TestOrmc(t *testing.T) {
 		}
 	})
 
-	t.Run("Form tags and FormName", func(t *testing.T) {
+	t.Run("Validate tags and Permitted", func(t *testing.T) {
 		err := orm.NewOrmc().GenerateForStruct("UserForm", "mock_generator_model.go")
 		if err != nil {
 			t.Fatalf("Failed to generate code for UserForm: %v", err)
@@ -71,10 +71,13 @@ func TestOrmc(t *testing.T) {
 		expectedStrings := []string{
 			"func (m *UserForm) FormName() string {",
 			"return \"user_form\"",
-			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, Input: \"email\"}",
-			"{Name: \"password\", Type: fmt.FieldText, Input: \"password\"}",
-			"{Name: \"bio\", Type: fmt.FieldText, Input: \"textarea\"}",
-			"{Name: \"age\", Type: fmt.FieldInt, Input: \"-\"}",
+			"{Name: \"name\", Type: fmt.FieldText, Permitted: fmt.Permitted{Letters: true, Tilde: true, Spaces: true, Minimum: 2, Maximum: 100}}",
+			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, OmitEmpty: true}",
+			"{Name: \"password\", Type: fmt.FieldText, NotNull: true, Permitted: fmt.Permitted{Minimum: 8}}",
+			"{Name: \"bio\", Type: fmt.FieldText, OmitEmpty: true, Permitted: fmt.Permitted{Tilde: true, Spaces: true}}",
+			"func (m *UserForm) Validate() error {",
+			"if err := fmt.ValidateFielder(m); err != nil { return err }",
+			"if err := form.ValidateEmail(m.Email); err != nil { return err }",
 		}
 
 		for _, expected := range expectedStrings {
@@ -292,11 +295,11 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			`{Name: "id", Type: fmt.FieldText, PK: true, JSON: "id"}`,
-			`{Name: "name", Type: fmt.FieldText, JSON: "name"}`,
-			`{Name: "email", Type: fmt.FieldText, Input: "email", JSON: "email"}`,
-			`{Name: "bio", Type: fmt.FieldText, Input: "textarea", JSON: "bio,omitempty"}`,
-			`{Name: "home_addr", Type: fmt.FieldStruct, JSON: "home_addr"}`,
+			`{Name: "id", Type: fmt.FieldText, PK: true}`,
+			`{Name: "name", Type: fmt.FieldText}`,
+			`{Name: "email", Type: fmt.FieldText}`,
+			`{Name: "bio", Type: fmt.FieldText, OmitEmpty: true}`,
+			`{Name: "home_addr", Type: fmt.FieldStruct}`,
 		}
 
 		for _, expected := range expectedStrings {
@@ -332,30 +335,6 @@ func TestOrmc(t *testing.T) {
 		}
 	})
 
-	t.Run("JSON tags stage 1", func(t *testing.T) {
-		err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		outFile := "mock_generator_model_orm.go"
-		contentBytes, err := os.ReadFile(outFile)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		defer os.Remove(outFile)
-		content := string(contentBytes)
-		expected := []string{
-			`JSON: "id"`,
-			`JSON: "name"`,
-			`JSON: "email"`,
-			`JSON: "bio,omitempty"`,
-		}
-		for _, e := range expected {
-			if !strings.Contains(content, e) {
-				t.Errorf("missing: %s\nContent:\n%s", e, content)
-			}
-		}
-	})
 
 	t.Run("FieldStruct for nested struct stage 1", func(t *testing.T) {
 		err := orm.NewOrmc().GenerateForStruct("UserWithJSON", "mock_generator_model.go")
