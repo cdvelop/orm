@@ -8,12 +8,12 @@ import (
 // MockCompiler captures the query and returns a predefined plan.
 type MockCompiler struct {
 	LastQuery  orm.Query
-	LastModel  orm.Model
+	LastModel  fmt.Model
 	ReturnPlan orm.Plan
 	ReturnErr  error
 }
 
-func (m *MockCompiler) Compile(q orm.Query, model orm.Model) (orm.Plan, error) {
+func (m *MockCompiler) Compile(q orm.Query, model fmt.Model) (orm.Plan, error) {
 	m.LastQuery = q
 	m.LastModel = model
 	if m.ReturnPlan.Query == "" {

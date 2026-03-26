@@ -145,11 +145,11 @@ func RunCoreTests(t *testing.T) {
 
 		newCalled := 0
 		onRowCalled := 0
-		newFunc := func() orm.Model {
+		newFunc := func() fmt.Model {
 			newCalled++
 			return &MockModel{}
 		}
-		onRow := func(m orm.Model) {
+		onRow := func(m fmt.Model) {
 			onRowCalled++
 		}
 
@@ -417,7 +417,7 @@ func RunCoreTests(t *testing.T) {
 		mockExec.ReturnQueryRows = &MockRows{Count: 0}
 		db.Query(model).
 			Limit(5).
-			ReadAll(func() orm.Model { return nil }, func(orm.Model) {})
+			ReadAll(func() fmt.Model { return nil }, func(fmt.Model) {})
 
 		if mockCompiler.LastQuery.Limit != 5 {
 			t.Errorf("Expected Limit 5, got %d", mockCompiler.LastQuery.Limit)
@@ -554,8 +554,8 @@ func RunCoreTests(t *testing.T) {
 		}
 		// ReadAll Scan Error
 		db5 := orm.New(&MockExecutor{ReturnQueryRows: &MockRows{Count: 1, ScanErr: errors.New("scan err")}}, &MockCompiler{})
-		f := func() orm.Model { return &MockModel{} }
-		e := func(m orm.Model) {}
+		f := func() fmt.Model { return &MockModel{} }
+		e := func(m fmt.Model) {}
 		if err := db5.Query(model).ReadAll(f, e); err == nil || err.Error() != "scan err" {
 			t.Errorf("Expected scan err, got %v", err)
 		}

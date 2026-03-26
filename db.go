@@ -18,7 +18,7 @@ func New(exec Executor, compiler Compiler) *DB {
 }
 
 // Create inserts a new model into the database.
-func (db *DB) Create(m Model) error {
+func (db *DB) Create(m fmt.Model) error {
 	if err := validateQuery(ActionCreate, m); err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (db *DB) Create(m Model) error {
 // Update modifies an existing row. At least one Condition is required.
 // Providing zero conditions is a compile-time error — there is no variadic
 // fallback — preventing accidental full-table UPDATE statements.
-func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
+func (db *DB) Update(m fmt.Model, cond Condition, rest ...Condition) error {
 	if err := validateQuery(ActionUpdate, m); err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (e emptyModel) Schema() []fmt.Field { return nil }
 func (e emptyModel) Pointers() []any   { return nil }
 
 // CreateTable creates a new table for the given model.
-func (db *DB) CreateTable(m Model) error {
+func (db *DB) CreateTable(m fmt.Model) error {
 	if err := validateQuery(ActionCreateTable, m); err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (db *DB) CreateTable(m Model) error {
 }
 
 // DropTable drops the table for the given model.
-func (db *DB) DropTable(m Model) error {
+func (db *DB) DropTable(m fmt.Model) error {
 	if err := validateQuery(ActionDropTable, m); err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (db *DB) CreateDatabase(name string) error {
 // Delete deletes a model from the database.
 // At least one Condition is required. Providing zero conditions is a compile-time
 // error, preventing accidental full-table DELETE statements.
-func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error {
+func (db *DB) Delete(m fmt.Model, cond Condition, rest ...Condition) error {
 	if err := validateQuery(ActionDelete, m); err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error {
 }
 
 // Query creates a new QB instance.
-func (db *DB) Query(m Model) *QB {
+func (db *DB) Query(m fmt.Model) *QB {
 	return &QB{
 		db:    db,
 		model: m,

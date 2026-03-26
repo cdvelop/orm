@@ -3,12 +3,12 @@
 package tests
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/tinywasm/fmt"
 	"github.com/tinywasm/orm"
 )
 
@@ -155,7 +155,7 @@ func TestQB_ClauseChain(t *testing.T) {
 			Where("f").Like("%x%").
 			Where("g").In([]int{1, 2}).
 			Or().Where("h").Eq(9).
-			ReadAll(func() orm.Model { return &MockModel{} }, func(orm.Model) {})
+			ReadAll(func() fmt.Model { return &MockModel{} }, func(fmt.Model) {})
 
 		conds := mockCompiler.LastQuery.Conditions
 		expected := []struct {

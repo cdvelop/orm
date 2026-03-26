@@ -2,7 +2,7 @@ package orm
 
 import "github.com/tinywasm/fmt"
 
-func validateQuery(action Action, m Model) error {
+func validateQuery(action Action, m fmt.Model) error {
 	if action != ActionCreateDatabase && m.ModelName() == "" {
 		return ErrEmptyTable
 	}
