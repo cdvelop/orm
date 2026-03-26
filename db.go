@@ -19,12 +19,7 @@ func New(exec Executor, compiler Compiler) *DB {
 
 // Create inserts a new model into the database.
 func (db *DB) Create(m Model) error {
-	if v, ok := m.(fmt.Validator); ok {
-		if err := v.Validate(); err != nil {
-			return err
-		}
-	}
-	if err := validate(ActionCreate, m); err != nil {
+	if err := validateQuery(ActionCreate, m); err != nil {
 		return err
 	}
 	schema := m.Schema()
@@ -44,7 +39,7 @@ func (db *DB) Create(m Model) error {
 	}
 	q := Query{
 		Action:  ActionCreate,
-		Table:   m.TableName(),
+		Table:   m.ModelName(),
 		Columns: columns,
 		Values:  values,
 	}
@@ -59,12 +54,7 @@ func (db *DB) Create(m Model) error {
 // Providing zero conditions is a compile-time error — there is no variadic
 // fallback — preventing accidental full-table UPDATE statements.
 func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
-	if v, ok := m.(fmt.Validator); ok {
-		if err := v.Validate(); err != nil {
-			return err
-		}
-	}
-	if err := validate(ActionUpdate, m); err != nil {
+	if err := validateQuery(ActionUpdate, m); err != nil {
 		return err
 	}
 	conds := append([]Condition{cond}, rest...)
@@ -75,7 +65,7 @@ func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
 	}
 	q := Query{
 		Action:     ActionUpdate,
-		Table:      m.TableName(),
+		Table:      m.ModelName(),
 		Columns:    columns,
 		Values:     fmt.ReadValues(schema, m.Pointers()),
 		Conditions: conds,
@@ -90,18 +80,18 @@ func (db *DB) Update(m Model, cond Condition, rest ...Condition) error {
 // emptyModel is a private zero-value type used only for CreateDatabase.
 type emptyModel struct{}
 
-func (e emptyModel) TableName() string { return "" }
+func (e emptyModel) ModelName() string { return "" }
 func (e emptyModel) Schema() []fmt.Field { return nil }
 func (e emptyModel) Pointers() []any   { return nil }
 
 // CreateTable creates a new table for the given model.
 func (db *DB) CreateTable(m Model) error {
-	if err := validate(ActionCreateTable, m); err != nil {
+	if err := validateQuery(ActionCreateTable, m); err != nil {
 		return err
 	}
 	q := Query{
 		Action: ActionCreateTable,
-		Table:  m.TableName(),
+		Table:  m.ModelName(),
 	}
 	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
@@ -112,12 +102,12 @@ func (db *DB) CreateTable(m Model) error {
 
 // DropTable drops the table for the given model.
 func (db *DB) DropTable(m Model) error {
-	if err := validate(ActionDropTable, m); err != nil {
+	if err := validateQuery(ActionDropTable, m); err != nil {
 		return err
 	}
 	q := Query{
 		Action: ActionDropTable,
-		Table:  m.TableName(),
+		Table:  m.ModelName(),
 	}
 	plan, err := db.compiler.Compile(q, m)
 	if err != nil {
@@ -129,7 +119,7 @@ func (db *DB) DropTable(m Model) error {
 // CreateDatabase creates a new database.
 func (db *DB) CreateDatabase(name string) error {
 	m := emptyModel{}
-	if err := validate(ActionCreateDatabase, m); err != nil {
+	if err := validateQuery(ActionCreateDatabase, m); err != nil {
 		return err
 	}
 	q := Query{
@@ -147,13 +137,13 @@ func (db *DB) CreateDatabase(name string) error {
 // At least one Condition is required. Providing zero conditions is a compile-time
 // error, preventing accidental full-table DELETE statements.
 func (db *DB) Delete(m Model, cond Condition, rest ...Condition) error {
-	if err := validate(ActionDelete, m); err != nil {
+	if err := validateQuery(ActionDelete, m); err != nil {
 		return err
 	}
 	conds := append([]Condition{cond}, rest...)
 	q := Query{
 		Action:     ActionDelete,
-		Table:      m.TableName(),
+		Table:      m.ModelName(),
 		Conditions: conds,
 	}
 	plan, err := db.compiler.Compile(q, m)

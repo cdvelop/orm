@@ -124,12 +124,12 @@ func (qb *QB) GroupBy(columns ...string) *QB {
 
 // ReadOne executes the query and returns a single result.
 func (qb *QB) ReadOne() error {
-	if err := validate(ActionReadOne, qb.model); err != nil {
+	if err := validateQuery(ActionReadOne, qb.model); err != nil {
 		return err
 	}
 	q := Query{
 		Action:     ActionReadOne,
-		Table:      qb.model.TableName(),
+		Table:      qb.model.ModelName(),
 		Conditions: qb.conds,
 		OrderBy:    qb.orderBy,
 		GroupBy:    qb.groupBy,
@@ -150,12 +150,12 @@ func (qb *QB) ReadOne() error {
 
 // ReadAll executes the query and returns all results.
 func (qb *QB) ReadAll(new func() Model, onRow func(Model)) error {
-	if err := validate(ActionReadAll, qb.model); err != nil {
+	if err := validateQuery(ActionReadAll, qb.model); err != nil {
 		return err
 	}
 	q := Query{
 		Action:     ActionReadAll,
-		Table:      qb.model.TableName(),
+		Table:      qb.model.ModelName(),
 		Conditions: qb.conds,
 		OrderBy:    qb.orderBy,
 		GroupBy:    qb.groupBy,

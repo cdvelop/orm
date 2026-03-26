@@ -15,11 +15,11 @@ func TestOrmc_RelationLoader(t *testing.T) {
 	t.Run("ResolveRelations detects FK and sets LoaderName", func(t *testing.T) {
 		o := orm.NewOrmc()
 
-		parent, err := o.ParseStruct("MockParent", "mock_generator_model.go")
+		parent, err := o.ParseStruct("MockParent", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
-		child, err := o.ParseStruct("MockChild", "mock_generator_model.go")
+		child, err := o.ParseStruct("MockChild", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,8 +42,8 @@ func TestOrmc_RelationLoader(t *testing.T) {
 	t.Run("GenerateForFile emits relation loader", func(t *testing.T) {
 		o := orm.NewOrmc()
 
-		parent, _ := o.ParseStruct("MockParent", "mock_generator_model.go")
-		child, _ := o.ParseStruct("MockChild", "mock_generator_model.go")
+		parent, _ := o.ParseStruct("MockParent", "models.go")
+		child, _ := o.ParseStruct("MockChild", "models.go")
 
 		all := map[string]orm.StructInfo{
 			"MockParent": parent,
@@ -51,12 +51,12 @@ func TestOrmc_RelationLoader(t *testing.T) {
 		}
 		o.ResolveRelations(all)
 
-		err := o.GenerateForFile([]orm.StructInfo{all["MockChild"]}, "mock_generator_model.go")
+		err := o.GenerateForFile([]orm.StructInfo{all["MockChild"]}, "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -78,8 +78,8 @@ func TestOrmc_RelationLoader(t *testing.T) {
 		})
 
 		// MultiA has no FK pointing to any parent
-		parent, _ := o.ParseStruct("MockParent", "mock_generator_model.go")
-		noFK, _ := o.ParseStruct("MultiA", "mock_generator_model.go")
+		parent, _ := o.ParseStruct("MockParent", "models.go")
+		noFK, _ := o.ParseStruct("MultiA", "models.go")
 
 		all := map[string]orm.StructInfo{
 			"MockParent": parent,

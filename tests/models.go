@@ -2,8 +2,6 @@ package tests
 
 import (
 	"time"
-
-	"github.com/tinywasm/fmt"
 )
 
 //go:generate ormc
@@ -43,7 +41,7 @@ type MultiA struct {
 	ID   string `db:"pk"`
 	Name string
 }
-func (MultiA) TableName() string { return "multi_a_records" } // manually declared → D5
+func (MultiA) ModelName() string { return "multi_a_records" } // manually declared → D5
 
 type MultiB struct {
 	ID    string `db:"pk"`
@@ -77,7 +75,7 @@ type PointerReceiver struct {
 	Name string
 }
 
-func (*PointerReceiver) TableName() string { return "ptr_table" }
+func (*PointerReceiver) ModelName() string { return "ptr_table" }
 
 // MockParent / MockChild: relation auto-detection fixture.
 type MockParent struct {
@@ -111,9 +109,6 @@ type Address struct {
 	Street string
 	City   string
 }
-
-func (Address) Schema() []fmt.Field { return nil }
-func (Address) Pointers() []any     { return nil }
 
 type UserWithJSON struct {
 	ID       string  `db:"pk"           json:"id"`

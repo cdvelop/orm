@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/tinywasm/fmt"
@@ -183,8 +182,8 @@ func RunCoreTests(t *testing.T) {
 		}
 	})
 
-	// 6. Test Validation Error (Create)
-	t.Run("Validation Error Create", func(t *testing.T) {
+	// 6. Test Validation (Verify db.Create no longer calls Validate)
+	t.Run("Create No Longer Calls Validate", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table:    "user",
@@ -194,13 +193,13 @@ func RunCoreTests(t *testing.T) {
 		}
 
 		err := db.Create(model)
-		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
-			t.Errorf("Expected custom validation error, got %v", err)
+		if err != nil {
+			t.Errorf("Expected no validation error from db.Create, got %v", err)
 		}
 	})
 
-	// 7. Test Validation Error (Update)
-	t.Run("Validation Error Update", func(t *testing.T) {
+	// 7. Test Validation (Verify db.Update no longer calls Validate)
+	t.Run("Update No Longer Calls Validate", func(t *testing.T) {
 		db := orm.New(&MockExecutor{}, &MockCompiler{})
 		model := &MockModel{
 			Table:    "user",
@@ -210,8 +209,8 @@ func RunCoreTests(t *testing.T) {
 		}
 
 		err := db.Update(model, orm.Eq("id", 1))
-		if err == nil || !strings.Contains(err.Error(), "custom validation error") {
-			t.Errorf("Expected custom validation error, got %v", err)
+		if err != nil {
+			t.Errorf("Expected no validation error from db.Update, got %v", err)
 		}
 	})
 

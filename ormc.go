@@ -11,13 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	. "github.com/tinywasm/fmt"
+	"github.com/tinywasm/fmt"
 )
 
 type FieldInfo struct {
 	Name       string
 	ColumnName string
-	Type       FieldType
+	Type       fmt.FieldType
 	PK         bool
 	Unique     bool
 	NotNull    bool
@@ -47,25 +47,25 @@ type SliceFieldInfo struct {
 
 type StructInfo struct {
 	Name              string
-	TableName         string
+	ModelName         string
 	PackageName       string
 	Fields            []FieldInfo
-	TableNameDeclared bool
+	ModelNameDeclared bool
 	FormOnly          bool
 	SourceFile        string
 	SliceFields       []SliceFieldInfo // populated by ParseStruct; used by ResolveRelations
 	Relations         []RelationInfo   // populated by ResolveRelations; used by GenerateForFile
 }
 
-// detectTableName scans the AST for func (X) TableName() string on structName.
+// detectModelName scans the AST for func (X) ModelName() string on structName.
 // Returns the literal return value if found, "" otherwise.
-func detectTableName(node *ast.File, structName string) string {
+func detectModelName(node *ast.File, structName string) string {
 	for _, decl := range node.Decls {
 		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok || funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 			continue
 		}
-		if funcDecl.Name.Name != "TableName" {
+		if funcDecl.Name.Name != "ModelName" {
 			continue
 		}
 		recv := funcDecl.Recv.List[0].Type
@@ -83,7 +83,7 @@ func detectTableName(node *ast.File, structName string) string {
 		if funcDecl.Body != nil && len(funcDecl.Body.List) == 1 {
 			if ret, ok := funcDecl.Body.List[0].(*ast.ReturnStmt); ok && len(ret.Results) == 1 {
 				if lit, ok := ret.Results[0].(*ast.BasicLit); ok {
-					return Convert(lit.Value).TrimPrefix(`"`).TrimSuffix(`"`).String()
+					return fmt.Convert(lit.Value).TrimPrefix(`"`).TrimSuffix(`"`).String()
 				}
 			}
 		}
@@ -94,17 +94,17 @@ func detectTableName(node *ast.File, structName string) string {
 // ParseStruct parses a single struct from a Go file and returns its metadata.
 func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error) {
 	if structName == "" {
-		return StructInfo{}, Err("Please provide a struct name")
+		return StructInfo{}, fmt.Err("Please provide a struct name")
 	}
 
 	if goFile == "" {
-		return StructInfo{}, Err("goFile path cannot be empty")
+		return StructInfo{}, fmt.Err("goFile path cannot be empty")
 	}
 
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, goFile, nil, parser.ParseComments)
 	if err != nil {
-		return StructInfo{}, Err(err, "Failed to parse file")
+		return StructInfo{}, fmt.Err(err, "Failed to parse file")
 	}
 
 	var targetStruct *ast.StructType
@@ -121,7 +121,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 							structFound = true
 							if genDecl.Doc != nil {
 								for _, comment := range genDecl.Doc.List {
-									if Contains(comment.Text, "ormc:formonly") {
+									if strings.Contains(comment.Text, "ormc:formonly") {
 										formOnly = true
 										break
 									}
@@ -137,20 +137,20 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 	})
 
 	if !structFound {
-		return StructInfo{}, Err("Struct not found in file")
+		return StructInfo{}, fmt.Err("Struct not found in file")
 	}
 
-	tableName := detectTableName(node, structName)
-	declared := tableName != ""
+	modelName := detectModelName(node, structName)
+	declared := modelName != ""
 	if !declared {
-		tableName = Convert(structName).SnakeLow().String()
+		modelName = fmt.Convert(structName).SnakeLow().String()
 	}
 
 	info := StructInfo{
 		Name:              structName,
-		TableName:         tableName,
+		ModelName:         modelName,
 		PackageName:       node.Name.Name,
-		TableNameDeclared: declared,
+		ModelNameDeclared: declared,
 		FormOnly:          formOnly,
 	}
 
@@ -169,15 +169,15 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		jsonTag := ""
 		validateTag := ""
 		if field.Tag != nil {
-			tagVal := Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
-			parts := Convert(tagVal).Split(" ")
+			tagVal := fmt.Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
+			parts := fmt.Convert(tagVal).Split(" ")
 			for _, p := range parts {
-				if HasPrefix(p, "db:\"") {
-					dbTag = Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
-				} else if HasPrefix(p, "json:\"") {
-					jsonTag = Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
-				} else if HasPrefix(p, "validate:\"") {
-					validateTag = Convert(p).TrimPrefix(`validate:"`).TrimSuffix(`"`).String()
+				if strings.HasPrefix(p, "db:\"") {
+					dbTag = fmt.Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
+				} else if strings.HasPrefix(p, "json:\"") {
+					jsonTag = fmt.Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
+				} else if strings.HasPrefix(p, "validate:\"") {
+					validateTag = fmt.Convert(p).TrimPrefix(`validate:"`).TrimSuffix(`"`).String()
 				}
 			}
 		}
@@ -198,7 +198,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		// Field Type mapping
-		var fieldType FieldType
+		var fieldType fmt.FieldType
 		var typeStr string
 		var isPointer bool
 
@@ -221,38 +221,38 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		if typeStr == "time.Time" {
-			o.log(Sprintf("Warning: time.Time not allowed for field %s.%s; use int64+tinywasm/time. Skipping.", structName, fieldName))
+			o.log(fmt.Sprintf("Warning: time.Time not allowed for field %s.%s; use int64+tinywasm/time. Skipping.", structName, fieldName))
 			continue
 		}
 
 		switch typeStr {
 		case "string":
-			fieldType = FieldText
+			fieldType = fmt.FieldText
 		case "int", "int32", "int64", "uint", "uint32", "uint64":
-			fieldType = FieldInt
+			fieldType = fmt.FieldInt
 		case "float32", "float64":
-			fieldType = FieldFloat
+			fieldType = fmt.FieldFloat
 		case "bool":
-			fieldType = FieldBool
+			fieldType = fmt.FieldBool
 		case "[]byte":
-			fieldType = FieldBlob
+			fieldType = fmt.FieldBlob
 		default:
 			// If it's a struct (but not time.Time, not slice, not chan), map to FieldStruct
-			if typeStr != "" && !Contains(typeStr, "[") && !Contains(typeStr, "chan ") {
-				fieldType = FieldStruct
+			if typeStr != "" && !strings.Contains(typeStr, "[") && !strings.Contains(typeStr, "chan ") {
+				fieldType = fmt.FieldStruct
 			} else {
-				o.log(Sprintf("Warning: unsupported type %s for field %s.%s; skipping. Add db:\"-\" to suppress.", typeStr, structName, fieldName))
+				o.log(fmt.Sprintf("Warning: unsupported type %s for field %s.%s; skipping. Add db:\"-\" to suppress.", typeStr, structName, fieldName))
 				continue
 			}
 		}
 
-		if isPointer && fieldType != FieldStruct {
-			o.log(Sprintf("Warning: pointers to primitive types not supported for field %s.%s; skipping. Add db:\"-\" to suppress.", structName, fieldName))
+		if isPointer && fieldType != fmt.FieldStruct {
+			o.log(fmt.Sprintf("Warning: pointers to primitive types not supported for field %s.%s; skipping. Add db:\"-\" to suppress.", structName, fieldName))
 			continue
 		}
 
-		colName := Convert(fieldName).SnakeLow().String()
-		isID, isPK := IDorPrimaryKey(tableName, fieldName)
+		colName := fmt.Convert(fieldName).SnakeLow().String()
+		isID, isPK := fmt.IDorPrimaryKey(modelName, fieldName)
 
 		var pk, unique, notNull, autoInc bool
 		var ref, refCol string
@@ -265,7 +265,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		}
 
 		if dbTag != "" {
-			tagParts := Convert(dbTag).Split(",")
+			tagParts := fmt.Convert(dbTag).Split(",")
 			for _, p := range tagParts {
 				switch {
 				case p == "pk":
@@ -279,13 +279,13 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 				case p == "not_null":
 					notNull = true
 				case p == "autoincrement":
-					if fieldType == FieldText {
-						return StructInfo{}, Err("autoincrement not allowed on FieldText")
+					if fieldType == fmt.FieldText {
+						return StructInfo{}, fmt.Err("autoincrement not allowed on FieldText")
 					}
 					autoInc = true
-				case HasPrefix(p, "ref="):
-					refVal := Convert(p).TrimPrefix("ref=").String()
-					refParts := Convert(refVal).Split(":")
+				case strings.HasPrefix(p, "ref="):
+					refVal := fmt.Convert(p).TrimPrefix("ref=").String()
+					refParts := fmt.Convert(refVal).Split(":")
 					ref = refParts[0]
 					if len(refParts) > 1 {
 						refCol = refParts[1]
@@ -296,7 +296,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 		omitEmpty := false
 		if jsonTag != "" {
-			parts := Convert(jsonTag).Split(",")
+			parts := fmt.Convert(jsonTag).Split(",")
 			for _, p := range parts {
 				if p == "omitempty" {
 					omitEmpty = true
@@ -331,7 +331,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 // parseValidateTag maps validate:"..." rules to FieldInfo Permitted fields.
 func parseValidateTag(tag string, fi *FieldInfo) {
-	parts := Convert(tag).Split(",")
+	parts := fmt.Convert(tag).Split(",")
 	for _, v := range parts {
 		switch {
 		case v == "required":
@@ -358,11 +358,11 @@ func parseValidateTag(tag string, fi *FieldInfo) {
 			fi.Tilde = true
 		case v == "spaces":
 			fi.Spaces = true
-		case HasPrefix(v, "min="):
-			n, _ := Convert(v).TrimPrefix("min=").Int64()
+		case strings.HasPrefix(v, "min="):
+			n, _ := fmt.Convert(v).TrimPrefix("min=").Int64()
 			fi.Minimum = int(n)
-		case HasPrefix(v, "max="):
-			n, _ := Convert(v).TrimPrefix("max=").Int64()
+		case strings.HasPrefix(v, "max="):
+			n, _ := fmt.Convert(v).TrimPrefix("max=").Int64()
 			fi.Maximum = int(n)
 		}
 	}
@@ -387,7 +387,7 @@ func capitalize(s string) string {
 	return strings.ToUpper(s[0:1]) + s[1:]
 }
 
-func writePermittedFields(buf *Conv, f FieldInfo) {
+func writePermittedFields(buf *fmt.Conv, f FieldInfo) {
 	// Use nested Permitted literal
 	hasPerm := f.Letters || f.Tilde || f.Numbers || f.Spaces ||
 		len(f.Extra) > 0 || f.Minimum > 0 || f.Maximum > 0
@@ -411,10 +411,10 @@ func writePermittedFields(buf *Conv, f FieldInfo) {
 		parts = append(parts, "Spaces: true")
 	}
 	if f.Minimum > 0 {
-		parts = append(parts, Sprintf("Minimum: %d", f.Minimum))
+		parts = append(parts, fmt.Sprintf("Minimum: %d", f.Minimum))
 	}
 	if f.Maximum > 0 {
-		parts = append(parts, Sprintf("Maximum: %d", f.Maximum))
+		parts = append(parts, fmt.Sprintf("Maximum: %d", f.Maximum))
 	}
 	if len(f.Extra) > 0 {
 		buf2 := "Extra: []rune{"
@@ -422,7 +422,7 @@ func writePermittedFields(buf *Conv, f FieldInfo) {
 			if i > 0 {
 				buf2 += ", "
 			}
-			buf2 += Sprintf("'%s'", string(r))
+			buf2 += fmt.Sprintf("'%s'", string(r))
 		}
 		buf2 += "}"
 		parts = append(parts, buf2)
@@ -443,11 +443,11 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	if len(infos) == 0 {
 		return nil
 	}
-	buf := Convert()
+	buf := fmt.Convert()
 
 	// File Header
-	buf.Write(Sprintf("// DO NOT EDIT. generated by github.com/tinywasm/orm\n\n"))
-	buf.Write(Sprintf("package %s\n\n", infos[0].PackageName))
+	buf.Write(fmt.Sprintf("// DO NOT EDIT. generated by github.com/tinywasm/orm\n\n"))
+	buf.Write(fmt.Sprintf("package %s\n\n", infos[0].PackageName))
 
 	hasModel := false
 	hasFormat := false
@@ -475,34 +475,30 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	for _, info := range infos {
 		if !info.FormOnly {
 			// Model Interface Methods
-			if !info.TableNameDeclared {
-				buf.Write(Sprintf("func (m *%s) TableName() string {\n", info.Name))
-				buf.Write(Sprintf("\treturn \"%s\"\n", info.TableName))
+			if !info.ModelNameDeclared {
+				buf.Write(fmt.Sprintf("func (m *%s) ModelName() string {\n", info.Name))
+				buf.Write(fmt.Sprintf("\treturn \"%s\"\n", info.ModelName))
 				buf.Write("}\n\n")
 			}
 		}
 
-		buf.Write(Sprintf("func (m *%s) FormName() string {\n", info.Name))
-		buf.Write(Sprintf("\treturn \"%s\"\n", Convert(info.Name).SnakeLow().String()))
-		buf.Write("}\n\n")
-
-		buf.Write(Sprintf("var _schema%s = []fmt.Field{\n", info.Name))
+		buf.Write(fmt.Sprintf("var _schema%s = []fmt.Field{\n", info.Name))
 		for _, f := range info.Fields {
 			typeStr := "fmt.FieldText"
 			switch f.Type {
-			case FieldInt:
+			case fmt.FieldInt:
 				typeStr = "fmt.FieldInt"
-			case FieldFloat:
+			case fmt.FieldFloat:
 				typeStr = "fmt.FieldFloat"
-			case FieldBool:
+			case fmt.FieldBool:
 				typeStr = "fmt.FieldBool"
-			case FieldBlob:
+			case fmt.FieldBlob:
 				typeStr = "fmt.FieldBlob"
-			case FieldStruct:
+			case fmt.FieldStruct:
 				typeStr = "fmt.FieldStruct"
 			}
 
-			buf.Write(Sprintf("\t\t{Name: \"%s\", Type: %s", f.ColumnName, typeStr))
+			buf.Write(fmt.Sprintf("\t\t{Name: \"%s\", Type: %s", f.ColumnName, typeStr))
 			if f.PK {
 				buf.Write(", PK: true")
 			}
@@ -523,12 +519,12 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		}
 		buf.Write("\t}\n\n")
 
-		buf.Write(Sprintf("func (m *%s) Schema() []fmt.Field { return _schema%s }\n\n", info.Name, info.Name))
+		buf.Write(fmt.Sprintf("func (m *%s) Schema() []fmt.Field { return _schema%s }\n\n", info.Name, info.Name))
 
-		buf.Write(Sprintf("func (m *%s) Pointers() []any {\n", info.Name))
+		buf.Write(fmt.Sprintf("func (m *%s) Pointers() []any {\n", info.Name))
 		buf.Write("\treturn []any{\n")
 		for _, f := range info.Fields {
-			buf.Write(Sprintf("\t\t&m.%s,\n", f.Name))
+			buf.Write(fmt.Sprintf("\t\t&m.%s,\n", f.Name))
 		}
 		buf.Write("\t}\n")
 		buf.Write("}\n\n")
@@ -543,14 +539,27 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		}
 
 		if hasValidation {
-			buf.Write(Sprintf("func (m *%s) Validate() error {\n", info.Name))
-			buf.Write("\tif err := fmt.ValidateFielder(m); err != nil { return err }\n")
+			buf.Write(fmt.Sprintf("func (m *%s) Validate(action byte) error {\n", info.Name))
+			buf.Write("\tif err := fmt.ValidateFields(action, m); err != nil { return err }\n")
+
+			hasFormatInStruct := false
 			for _, f := range info.Fields {
 				if f.Format != "" {
-					// E.g. "email" -> "ValidateEmail"
-					validatorName := "form.Validate" + capitalize(f.Format)
-					buf.Write(Sprintf("\tif err := %s(m.%s); err != nil { return err }\n", validatorName, f.Name))
+					hasFormatInStruct = true
+					break
 				}
+			}
+
+			if hasFormatInStruct {
+				buf.Write("\tif action == 'c' || action == 'u' {\n")
+				for _, f := range info.Fields {
+					if f.Format != "" {
+						// E.g. "email" -> "ValidateEmail"
+						validatorName := "form.Validate" + capitalize(f.Format)
+						buf.Write(fmt.Sprintf("\t\tif err := %s(m.%s); err != nil { return err }\n", validatorName, f.Name))
+					}
+				}
+				buf.Write("\t}\n")
 			}
 			buf.Write("\treturn nil\n")
 			buf.Write("}\n\n")
@@ -558,20 +567,20 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 
 		if !info.FormOnly {
 			// Metadata Descriptors
-			buf.Write(Sprintf("var %s_ = struct {\n", info.Name))
-			buf.Write("\tTableName string\n")
+			buf.Write(fmt.Sprintf("var %s_ = struct {\n", info.Name))
+			buf.Write("\tModelName string\n")
 			for _, f := range info.Fields {
-				buf.Write(Sprintf("\t%s string\n", f.Name))
+				buf.Write(fmt.Sprintf("\t%s string\n", f.Name))
 			}
 			buf.Write("}{\n")
-			buf.Write(Sprintf("\tTableName: \"%s\",\n", info.TableName))
+			buf.Write(fmt.Sprintf("\tModelName: \"%s\",\n", info.ModelName))
 			for _, f := range info.Fields {
-				buf.Write(Sprintf("\t%s: \"%s\",\n", f.Name, f.ColumnName))
+				buf.Write(fmt.Sprintf("\t%s: \"%s\",\n", f.Name, f.ColumnName))
 			}
 			buf.Write("}\n\n")
 
 			// Typed Read Operations
-			buf.Write(Sprintf("func ReadOne%s(qb *orm.QB, model *%s) (*%s, error) {\n", info.Name, info.Name, info.Name))
+			buf.Write(fmt.Sprintf("func ReadOne%s(qb *orm.QB, model *%s) (*%s, error) {\n", info.Name, info.Name, info.Name))
 			buf.Write("\terr := qb.ReadOne()\n")
 			buf.Write("\tif err != nil {\n")
 			buf.Write("\t\treturn nil, err\n")
@@ -579,17 +588,17 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 			buf.Write("\treturn model, nil\n")
 			buf.Write("}\n\n")
 
-			buf.Write(Sprintf("func ReadAll%s(qb *orm.QB) ([]*%s, error) {\n", info.Name, info.Name))
-			buf.Write(Sprintf("\tvar results []*%s\n", info.Name))
+			buf.Write(fmt.Sprintf("func ReadAll%s(qb *orm.QB) ([]*%s, error) {\n", info.Name, info.Name))
+			buf.Write(fmt.Sprintf("\tvar results []*%s\n", info.Name))
 			buf.Write("\terr := qb.ReadAll(\n")
-			buf.Write(Sprintf("\t\tfunc() orm.Model { return &%s{} },\n", info.Name))
-			buf.Write(Sprintf("\t\tfunc(m orm.Model) { results = append(results, m.(*%s)) },\n", info.Name))
+			buf.Write(fmt.Sprintf("\t\tfunc() orm.Model { return &%s{} },\n", info.Name))
+			buf.Write(fmt.Sprintf("\t\tfunc(m orm.Model) { results = append(results, m.(*%s)) },\n", info.Name))
 			buf.Write("\t)\n")
 			buf.Write("\treturn results, err\n")
 			buf.Write("}\n\n")
 
 			for _, rel := range info.Relations {
-				buf.Write(Sprintf(
+				buf.Write(fmt.Sprintf(
 					"// ReadAll%sByParentID retrieves all %s records for a given parent ID.\n"+
 						"// Auto-generated by ormc — relation detected via db:\"ref=%s\".\n"+
 						"func ReadAll%sBy%s(db *orm.DB, parentID %s) ([]*%s, error) {\n"+
@@ -597,7 +606,7 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 						"}\n\n",
 					rel.ChildStruct,
 					rel.ChildStruct,
-					info.TableName, // parent table, for the comment
+					info.ModelName, // parent table, for the comment
 					rel.ChildStruct, rel.FKField, rel.FKFieldType,
 					rel.ChildStruct,
 					rel.ChildStruct, rel.ChildStruct, rel.ChildStruct, rel.FKField,
@@ -606,7 +615,7 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		}
 	}
 
-	outName := Convert(sourceFile).TrimSuffix(".go").String() + "_orm.go"
+	outName := fmt.Convert(sourceFile).TrimSuffix(".go").String() + "_orm.go"
 	return os.WriteFile(outName, buf.Bytes(), 0644)
 }
 
@@ -646,11 +655,11 @@ func (o *Ormc) collectAllStructs() (map[string]StructInfo, []string, []string, e
 							if _, ok := typeSpec.Type.(*ast.StructType); ok {
 								info, err := o.ParseStruct(typeSpec.Name.Name, path)
 								if err != nil {
-									o.log(Sprintf("Skipping %s in %s: %v", typeSpec.Name.Name, path, err))
+									o.log(fmt.Sprintf("Skipping %s in %s: %v", typeSpec.Name.Name, path, err))
 									continue
 								}
 								if len(info.Fields) == 0 {
-									o.log(Sprintf("Warning: %s has no mappable fields; skipping", typeSpec.Name.Name))
+									o.log(fmt.Sprintf("Warning: %s has no mappable fields; skipping", typeSpec.Name.Name))
 									continue
 								}
 								info.SourceFile = path
@@ -686,7 +695,7 @@ func (o *Ormc) generateAll(all map[string]StructInfo, structOrder []string, file
 		infos := byFile[sourceFile]
 		if len(infos) > 0 {
 			if err := o.GenerateForFile(infos, sourceFile); err != nil {
-				o.log(Sprintf("Failed to write output for %s: %v", sourceFile, err))
+				o.log(fmt.Sprintf("Failed to write output for %s: %v", sourceFile, err))
 			}
 		}
 	}
@@ -698,10 +707,10 @@ func (o *Ormc) Run() error {
 	// Pass 1: collect all structs across all model files
 	all, structOrder, fileOrder, err := o.collectAllStructs()
 	if err != nil {
-		return Err(err, "error walking directory")
+		return fmt.Err(err, "error walking directory")
 	}
 	if len(all) == 0 {
-		return Err("no models found")
+		return fmt.Err("no models found")
 	}
 
 	// Pass 2: resolve cross-struct relations
@@ -716,10 +725,10 @@ func (o *Ormc) Run() error {
 	if _, err := os.Stat(filepath.Join(o.rootDir, "go.mod")); err == nil {
 		o.log("Syncing dependencies...")
 		if err := o.exec("go", "get", "github.com/tinywasm/fmt", "github.com/tinywasm/orm", "github.com/tinywasm/form"); err != nil {
-			return Err(err, "failed to get dependencies")
+			return fmt.Err(err, "failed to get dependencies")
 		}
 		if err := o.exec("go", "mod", "tidy"); err != nil {
-			return Err(err, "failed to tidy module")
+			return fmt.Err(err, "failed to tidy module")
 		}
 	}
 

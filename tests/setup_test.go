@@ -105,11 +105,11 @@ type MockModel struct {
 	ValidErr error
 }
 
-func (m *MockModel) Validate() error {
+func (m *MockModel) Validate(action byte) error {
 	return m.ValidErr
 }
 
-func (m MockModel) TableName() string   { return m.Table }
+func (m MockModel) ModelName() string   { return m.Table }
 func (m MockModel) Schema() []fmt.Field { return m.Sch }
 func (m MockModel) Pointers() []any     {
 	ptrs := make([]any, len(m.Vals))

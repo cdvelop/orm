@@ -15,22 +15,22 @@ import (
 func TestOrmc_MultiStruct(t *testing.T) {
 	t.Run("Both structs appear in a single output file", func(t *testing.T) {
 		o := orm.NewOrmc()
-		infoA, err := o.ParseStruct("MultiA", "mock_generator_model.go")
+		infoA, err := o.ParseStruct("MultiA", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		infoB, err := o.ParseStruct("MultiB", "mock_generator_model.go")
+		infoB, err := o.ParseStruct("MultiB", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		err = o.GenerateForFile([]orm.StructInfo{infoA, infoB}, "mock_generator_model.go")
+		err = o.GenerateForFile([]orm.StructInfo{infoA, infoB}, "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
@@ -55,7 +55,7 @@ func TestOrmc_Run(t *testing.T) {
 		tmp := t.TempDir()
 
 		// Copy model file into temp dir
-		src, err := os.ReadFile("mock_generator_model.go")
+		src, err := os.ReadFile("models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,24 +109,30 @@ func TestOrmc_Run(t *testing.T) {
 }
 
 func TestOrmc_DetectPointerReceiver(t *testing.T) {
-	t.Run("TableName() NOT generated when declared with pointer receiver", func(t *testing.T) {
-		err := orm.NewOrmc().GenerateForStruct("PointerReceiver", "mock_generator_model.go")
+	t.Run("ModelName() NOT generated when declared with pointer receiver", func(t *testing.T) {
+		// Update models.go to have ModelName() instead of TableName()
+		src, _ := os.ReadFile("models.go")
+		newSrc := strings.ReplaceAll(string(src), "TableName()", "ModelName()")
+		os.WriteFile("models_tmp.go", []byte(newSrc), 0644)
+		defer os.Remove("models_tmp.go")
+
+		err := orm.NewOrmc().GenerateForStruct("PointerReceiver", "models_tmp.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_tmp_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer os.Remove(outFile)
 
-		if strings.Contains(string(content), "func (m *PointerReceiver) TableName()") {
-			t.Error("TableName() must NOT be generated — already declared with pointer receiver")
+		if strings.Contains(string(content), "func (m *PointerReceiver) ModelName()") {
+			t.Error("ModelName() must NOT be generated — already declared with pointer receiver")
 		}
 		if !strings.Contains(string(content), `"ptr_table"`) {
-			// The Meta struct must reference the declared table name
+			// The Meta struct must reference the declared model name
 			t.Error("Expected ptr_table in generated meta")
 		}
 	})
@@ -183,52 +189,58 @@ func TestQB_ClauseChain(t *testing.T) {
 	})
 }
 
-func TestOrmc_TableNameDetection(t *testing.T) {
-	t.Run("TableName() NOT generated when already declared (D5)", func(t *testing.T) {
-		err := orm.NewOrmc().GenerateForStruct("MultiA", "mock_generator_model.go")
+func TestOrmc_ModelNameDetection(t *testing.T) {
+	t.Run("ModelName() NOT generated when already declared (D5)", func(t *testing.T) {
+		// Update models.go to have ModelName() instead of TableName()
+		src, _ := os.ReadFile("models.go")
+		newSrc := strings.ReplaceAll(string(src), "func (MultiA) TableName() string", "func (MultiA) ModelName() string")
+		os.WriteFile("models_tmp.go", []byte(newSrc), 0644)
+		defer os.Remove("models_tmp.go")
+
+		err := orm.NewOrmc().GenerateForStruct("MultiA", "models_tmp.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_tmp_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer os.Remove(outFile)
 
-		if strings.Contains(string(content), "func (m *MultiA) TableName()") {
-			t.Error("TableName() must NOT be generated — already declared in source")
+		if strings.Contains(string(content), "func (m *MultiA) ModelName()") {
+			t.Error("ModelName() must NOT be generated — already declared in source")
 		}
 	})
 
-	t.Run("TableName() IS generated when not declared (D5)", func(t *testing.T) {
-		err := orm.NewOrmc().GenerateForStruct("MultiB", "mock_generator_model.go")
+	t.Run("ModelName() IS generated when not declared (D5)", func(t *testing.T) {
+		err := orm.NewOrmc().GenerateForStruct("MultiB", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer os.Remove(outFile)
 
-		if !strings.Contains(string(content), "func (m *MultiB) TableName()") {
-			t.Error("TableName() must be generated — not declared in source")
+		if !strings.Contains(string(content), "func (m *MultiB) ModelName()") {
+			t.Error("ModelName() must be generated — not declared in source")
 		}
 	})
 }
 
 func TestOrmc_DbIgnoreTag(t *testing.T) {
 	t.Run("db:\"-\" fields excluded from Schema, Values, Pointers (D3+D4)", func(t *testing.T) {
-		err := orm.NewOrmc().GenerateForStruct("ModelWithIgnored", "mock_generator_model.go")
+		err := orm.NewOrmc().GenerateForStruct("ModelWithIgnored", "models.go")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		outFile := "mock_generator_model_orm.go"
+		outFile := "models_orm.go"
 		content, err := os.ReadFile(outFile)
 		if err != nil {
 			t.Fatal(err)
