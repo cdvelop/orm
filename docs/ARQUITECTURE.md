@@ -2,6 +2,17 @@
 
 The `tinywasm/orm` package is an ultra-lightweight, strongly-typed, zero-magic (no `reflect`), and isomorphic (WASM/Backend) ORM, strictly following the architectural mandates of the `tinywasm` ecosystem.
 
+## Background
+
+- [Why use this ORM?](WHY.md)
+- [Why package-level schema variables?](WHY_PACKAGE_LEVEL_SCHEMA.md)
+
+## Active Plans
+
+- [PLAN.md](PLAN.md) — Replace `form:`/`validate:` tags with unified `input:` tag; source file tag cleanup
+
+---
+
 ## 1. Primary Architectural Pattern: Dependency Injection and Explicit Models
 
 Unlike traditional ORMs (GORM, ObjectDB) that use `reflect` to infer tables and columns at runtime, `tinywasm/orm` requires **Entities (Structs)** to implement an explicit interface (`fmt.Model`). This ensures:
