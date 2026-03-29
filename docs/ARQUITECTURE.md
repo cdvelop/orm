@@ -4,7 +4,7 @@ The `tinywasm/orm` package is an ultra-lightweight, strongly-typed, zero-magic (
 
 ## 1. Primary Architectural Pattern: Dependency Injection and Explicit Models
 
-Unlike traditional ORMs (GORM, ObjectDB) that use `reflect` to infer tables and columns at runtime, `tinywasm/orm` requires **Entities (Structs)** to implement an explicit interface (`orm.Model`). This ensures:
+Unlike traditional ORMs (GORM, ObjectDB) that use `reflect` to infer tables and columns at runtime, `tinywasm/orm` requires **Entities (Structs)** to implement an explicit interface (`fmt.Model`). This ensures:
 
 1. **O(1) Performance in WASM:** Reflective processing overhead is eliminated.
 2. **Reduced Binary Size:** Importing `reflect` inflates the WASM binary.
