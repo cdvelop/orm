@@ -2,7 +2,7 @@
 
 **Module:** `github.com/tinywasm/orm`
 **Breaking change:** Yes — removes `form:` and `validate:` tag parsing; replaces with `input:` tag.
-**Execution order:** Requires `tinywasm/fmt` PLAN_WIDGET.md and `tinywasm/form` PLAN.md to be published first.
+**Execution order:** Requires `tinywasm/fmt` v0.21.1+ (Widget interface with `Clone(parentID, name)` signature) and `tinywasm/form` PLAN.md to be published first.
 
 ---
 
@@ -156,6 +156,8 @@ type FieldInfo struct {
 
 Replace the `validateTag` and `jsonTag` parsing block with `inputTag` parsing:
 
+Follow the existing parsing pattern in ormc.go (lines 168-183):
+
 ```go
 dbTag := ""
 inputTag := ""
@@ -163,19 +165,18 @@ omitEmpty := false
 jsonExclude := false
 
 if field.Tag != nil {
-    tagVal := // extract raw tag value without backticks
-    parts := // split by space-separated key:"value" pairs
+    tagVal := fmt.Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
+    parts := fmt.Convert(tagVal).Split(" ")
     for _, p := range parts {
-        switch {
-        case strings.HasPrefix(p, `db:"`):
-            dbTag = // extract value
-        case strings.HasPrefix(p, `input:"`):
-            inputTag = // extract value
-        case p == `json:"-"`:
+        if strings.HasPrefix(p, `db:"`) {
+            dbTag = fmt.Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
+        } else if strings.HasPrefix(p, `input:"`) {
+            inputTag = fmt.Convert(p).TrimPrefix(`input:"`).TrimSuffix(`"`).String()
+        } else if p == `json:"-"` {
             jsonExclude = true
-        case strings.HasPrefix(p, `json:"`):
-            val := // extract value
-            for _, part := range strings.Split(val, ",") {
+        } else if strings.HasPrefix(p, `json:"`) {
+            val := fmt.Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
+            for _, part := range fmt.Convert(val).Split(",") {
                 if part == "omitempty" {
                     omitEmpty = true
                 }
@@ -185,23 +186,42 @@ if field.Tag != nil {
 }
 ```
 
-Remove all `form:` tag parsing (it no longer exists).
+Remove all `form:` and `validate:` tag parsing branches (they no longer exist).
 
 ### 2.3 Update `parseValidateTag` → rename to `parseInputTag`
 
 Rename `parseValidateTag` to `parseInputTag`. Change it to:
-1. Extract the first segment as `WidgetName`
-2. Pass remaining segments to the existing Permitted parsing logic
+1. Check if first segment is a known input type (stdlib or custom) → set as `WidgetName`
+2. If first segment is a known modifier (`required`, `letters`, `numbers`, `spaces`, `tilde`, or starts with `min=`/`max=`), treat the entire tag as modifiers-only — no Widget
+3. Parse remaining (or all) segments as Permitted modifiers
+
+**Disambiguation rule:** The first segment is treated as `WidgetName` ONLY if it matches a known stdlib input (from `stdlibInputs` map) OR a custom input in `web/inputs/`. If the first segment is a known modifier name, the entire tag is modifiers-only — no Widget is assigned.
 
 ```go
-func parseInputTag(tag string, fi *FieldInfo) {
-    parts := split(tag, ",")
+// knownModifiers lists modifier names that are NOT input types.
+var knownModifiers = map[string]bool{
+    "required": true, "letters": true, "numbers": true,
+    "spaces": true, "tilde": true, "name": true,
+}
+
+func isModifier(s string) bool {
+    return knownModifiers[s] || strings.HasPrefix(s, "min=") || strings.HasPrefix(s, "max=")
+}
+
+func parseInputTag(tag string, fi *FieldInfo, isKnownInput func(string) bool) {
+    parts := fmt.Convert(tag).Split(",")
     if len(parts) == 0 {
         return
     }
-    fi.WidgetName = parts[0] // e.g., "email"
-    // Parse remaining as Permitted modifiers:
-    for _, v := range parts[1:] {
+
+    startIdx := 0
+    first := parts[0]
+    if !isModifier(first) && isKnownInput(first) {
+        fi.WidgetName = first
+        startIdx = 1
+    }
+
+    for _, v := range parts[startIdx:] {
         switch {
         case v == "required":
             fi.NotNull = true
@@ -213,18 +233,22 @@ func parseInputTag(tag string, fi *FieldInfo) {
             fi.Spaces = true
         case v == "tilde":
             fi.Tilde = true
+        case v == "name":
+            fi.Letters = true
+            fi.Tilde = true
+            fi.Spaces = true
         case strings.HasPrefix(v, "min="):
-            n, _ := parseIntSuffix(v, "min=")
-            fi.Minimum = n
+            n, _ := fmt.Convert(v).TrimPrefix("min=").Int64()
+            fi.Minimum = int(n)
         case strings.HasPrefix(v, "max="):
-            n, _ := parseIntSuffix(v, "max=")
-            fi.Maximum = n
+            n, _ := fmt.Convert(v).TrimPrefix("max=").Int64()
+            fi.Maximum = int(n)
         }
     }
 }
 ```
 
-Call `parseInputTag(inputTag, &fi)` instead of `parseValidateTag(validateTag, &fi)`.
+`isKnownInput` checks stdlib map first, then custom inputs via `findCustomInput`. Call `parseInputTag(inputTag, &fi, o.isKnownInput)` instead of `parseValidateTag(validateTag, &fi)`.
 
 ---
 
@@ -240,13 +264,15 @@ Scan `web/inputs/` in the project root directory for a Go file containing an exp
 
 **AST scan for custom inputs:**
 
+Custom input names MUST be camelCase (no hyphens, no underscores). Tag `input:"myCustom"` → matches `NewMyCustom()` via case-insensitive comparison.
+
 ```go
 func (o *Ormc) findCustomInput(name string) (constructor string, found bool) {
     webInputsDir := filepath.Join(o.rootDir, "web", "inputs")
     // Check if dir exists — if not, skip
     // Parse all *.go files in that dir
     // Look for func declarations matching: func New<X>() fmt.Widget
-    // Match X (lowercased) against name (lowercased)
+    // Match X (lowercased) against name (lowercased) — camelCase only
     // If found: return "webinputs.New<X>()", true
     return "", false
 }
@@ -351,9 +377,15 @@ Check `validate.go` — it currently references format validation. Remove any fo
 
 ## Tests
 
-### Tag rewrite tests (`ormc_tags_test.go`)
+### Test location
 
-Use golden file pattern: write a `testdata/before_model.go` and `testdata/after_model.go`, run `rewriteModelTags`, compare output.
+All tests go in `tests/` subdirectory (existing convention). Test files:
+- `tests/ormc_test.go` — existing file, add new test cases
+- `tests/ormc_tags_test.go` — new file for tag rewrite tests
+
+### Tag rewrite tests (`tests/ormc_tags_test.go`)
+
+Use golden file pattern: write a `tests/testdata/before_model.go` and `tests/testdata/after_model.go`, run `rewriteModelTags`, compare output.
 
 Test cases:
 1. `json:"name"` → removed
@@ -365,24 +397,29 @@ Test cases:
 7. `input:"email,required"` → unchanged
 8. Field with multiple tags — only json/form/validate affected, db and input untouched
 9. Field with no tags → unchanged
+10. Empty tag value `json:""` → removed (empty string has no purpose)
+11. Tag with only whitespace after cleanup → backticks removed entirely
 
-### Input tag parsing tests (`ormc_test.go`)
+### Input tag parsing tests (`tests/ormc_test.go`)
 
 Add to existing test suite:
 1. `input:"email"` → `WidgetName="email"`, no Permitted rules
 2. `input:"email,required"` → `WidgetName="email"`, `NotNull=true`
 3. `input:"text,required,min=2,max=100"` → `WidgetName="text"`, `NotNull=true`, `Minimum=2`, `Maximum=100`
 4. `input:"textarea,letters,spaces"` → `WidgetName="textarea"`, `Letters=true`, `Spaces=true`
-5. Unknown input type → `WidgetName=""`, warning logged
+5. `input:"required,min=5"` → no Widget (`WidgetName=""`), `NotNull=true`, `Minimum=5` (first segment is a modifier, not a type)
+6. `input:"name"` → no Widget (modifier shortcut), `Letters=true`, `Tilde=true`, `Spaces=true`
+7. Unknown first segment that is not a modifier → `WidgetName=""`, warning logged
+8. Empty `input:""` → no Widget, no modifiers
 
-### Input type lookup tests (`ormc_test.go`)
+### Input type lookup tests (`tests/ormc_test.go`)
 
-6. Custom input with name `"email"` in `web/inputs/` → custom constructor used, stdlib `input.NewEmail()` NOT used (custom overrides stdlib)
-7. Custom input with name `"rut"` in `web/inputs/` + stdlib also has `"rut"` → custom wins
-8. No `web/inputs/` directory → falls back to stdlib without error
-9. Name not in custom and not in stdlib → `WidgetName=""`, warning logged
+9. Custom input with name `"email"` in `web/inputs/` → custom constructor used, stdlib `input.NewEmail()` NOT used (custom overrides stdlib)
+10. Custom input with name `"rut"` in `web/inputs/` + stdlib also has `"rut"` → custom wins
+11. No `web/inputs/` directory → falls back to stdlib without error
+12. Name not in custom and not in stdlib → `WidgetName=""`, warning logged
 
-### Schema generation tests
+### Schema generation tests (`tests/ormc_test.go`)
 
 Verify that generated `model_orm.go` for a struct with `input:"email"` contains:
 - `Widget: input.NewEmail()` in the schema field
@@ -393,21 +430,18 @@ Verify that when a custom `NewEmail()` exists in `web/inputs/`:
 - Generated code uses `webinputs.NewEmail()` not `input.NewEmail()`
 - Import of `yourmodule/web/inputs` present, `github.com/tinywasm/form/input` absent (or only for other fields)
 
+Verify backward compatibility:
+- Struct with no `input:` tag → no Widget in schema, no `form/input` import
+- Struct with `db:` tag only → unchanged behavior
+
 ---
 
 ## go.mod Update
 
 ```bash
-go get github.com/tinywasm/fmt@<new_version_from_PLAN_FIELD_INPUT>
+go get github.com/tinywasm/fmt@v0.21.1
 go mod tidy
 ```
 
 `tinywasm/orm` does NOT import `tinywasm/form` directly — only the generated `model_orm.go` files import `tinywasm/form/input`. The `orm` package itself remains independent.
 
----
-
-## Publishing
-
-```bash
-gopush 'feat: replace form:/validate: tags with unified input: tag; add source file tag cleanup to ormc'
-```
