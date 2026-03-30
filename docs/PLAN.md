@@ -2,7 +2,7 @@
 
 **Module:** `github.com/tinywasm/orm`
 **Breaking change:** Yes — removes `form:` and `validate:` tag parsing; replaces with `input:` tag.
-**Execution order:** Requires `tinywasm/fmt` PLAN_FIELD_INPUT.md and `tinywasm/form` PLAN_INPUT_TAG.md to be published first.
+**Execution order:** Requires `tinywasm/fmt` PLAN_WIDGET.md and `tinywasm/form` PLAN.md to be published first.
 
 ---
 
