@@ -20,14 +20,14 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	buf.Write(fmt.Sprintf("package %s\n\n", infos[0].PackageName))
 
 	hasModel := false
-	hasFormat := false
+	hasWidget := false
 	for _, info := range infos {
 		if !info.FormOnly {
 			hasModel = true
 		}
 		for _, f := range info.Fields {
-			if f.Format != "" {
-				hasFormat = true
+			if f.WidgetConstructor != "" {
+				hasWidget = true
 			}
 		}
 	}
@@ -37,8 +37,8 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 	if hasModel {
 		buf.Write("\t\"github.com/tinywasm/orm\"\n")
 	}
-	if hasFormat {
-		buf.Write("\t\"github.com/tinywasm/form\"\n")
+	if hasWidget {
+		buf.Write("\t\"github.com/tinywasm/form/input\"\n")
 	}
 	buf.Write(")\n\n")
 
@@ -84,6 +84,9 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 			if f.OmitEmpty {
 				buf.Write(", OmitEmpty: true")
 			}
+			if f.WidgetConstructor != "" {
+				buf.Write(fmt.Sprintf(", Widget: %s", f.WidgetConstructor))
+			}
 			writePermittedFields(buf, f)
 			buf.Write("},\n")
 		}
@@ -99,39 +102,20 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 		buf.Write("\t}\n")
 		buf.Write("}\n\n")
 
-		hasValidation := false
-		for _, f := range info.Fields {
-			if f.NotNull || f.Letters || f.Numbers || f.Tilde || f.Spaces ||
-				len(f.Extra) > 0 || f.Minimum > 0 || f.Maximum > 0 || f.Format != "" {
-				hasValidation = true
-				break
+		hasValidation := info.IsForm
+		if !hasValidation {
+			for _, f := range info.Fields {
+				if f.NotNull || f.Letters || f.Numbers || f.Tilde || f.Spaces ||
+					len(f.Extra) > 0 || f.Minimum > 0 || f.Maximum > 0 {
+					hasValidation = true
+					break
+				}
 			}
 		}
 
 		if hasValidation {
 			buf.Write(fmt.Sprintf("func (m *%s) Validate(action byte) error {\n", info.Name))
-			buf.Write("\tif err := fmt.ValidateFields(action, m); err != nil { return err }\n")
-
-			hasFormatInStruct := false
-			for _, f := range info.Fields {
-				if f.Format != "" {
-					hasFormatInStruct = true
-					break
-				}
-			}
-
-			if hasFormatInStruct {
-				buf.Write("\tif action == 'c' || action == 'u' {\n")
-				for _, f := range info.Fields {
-					if f.Format != "" {
-						// E.g. "email" -> "ValidateEmail"
-						validatorName := "form.Validate" + capitalize(f.Format)
-						buf.Write(fmt.Sprintf("\t\tif err := %s(m.%s); err != nil { return err }\n", validatorName, f.Name))
-					}
-				}
-				buf.Write("\t}\n")
-			}
-			buf.Write("\treturn nil\n")
+			buf.Write("\treturn fmt.ValidateFields(action, m)\n")
 			buf.Write("}\n\n")
 		}
 

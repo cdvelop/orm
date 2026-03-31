@@ -90,19 +90,20 @@ type MockChild struct {
 	Value        string
 }
 
+// ormc:form
 type UserForm struct {
 	ID       string `db:"pk"`
-	Name     string `validate:"name,min=2,max=100"`
-	Email    string `db:"not_null" validate:"required,email" json:"email,omitempty"`
-	Password string `validate:"required,min=8"`
-	Bio      string `validate:"tilde,spaces" json:"bio,omitempty"`
+	Name     string `input:"name,min=2,max=100"`
+	Email    string `db:"not_null" input:"email,required" json:"email,omitempty"`
+	Password string `input:"password,required,min=8"`
+	Bio      string `input:"textarea,tilde,spaces" json:"bio,omitempty"`
 	Age      int64
 }
 
 // ormc:formonly
 type LoginForm struct {
-	Email    string `validate:"required,email"`
-	Password string `validate:"required"`
+	Email    string `input:"email,required"`
+	Password string `input:"password,required"`
 }
 
 type Address struct {
@@ -110,11 +111,12 @@ type Address struct {
 	City   string
 }
 
+// ormc:form
 type UserWithJSON struct {
 	ID       string  `db:"pk"           json:"id"`
 	Name     string  `json:"name"`
-	Email    string  `form:"email"      json:"email"`
-	Bio      string  `form:"textarea"   json:"bio,omitempty"`
+	Email    string  `input:"email"      json:"email"`
+	Bio      string  `input:"textarea"   json:"bio,omitempty"`
 	HomeAddr Address `json:"home_addr"`
 }
 
