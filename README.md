@@ -5,11 +5,10 @@
 
 ## Features
 
-- **Standard Library Only**: No external assertion libraries or heavy dependencies.
-- **Isomorphic & Agnostic**: Works identically in Go (backend) and WASM (frontend). Generated code contains no build tags.
-- **Interface over Reflection**: Zero use of `reflect` at runtime for maximum performance.
-- **Typed Schema**: Uses `github.com/tinywasm/fmt` for deterministic field mapping.
-- **Boilerplate Generator**: `ormc` CLI automates the `Model` interface implementation and handles dependencies.
+- **Zero Reflection**: Interface-driven schema via `github.com/tinywasm/fmt`
+- **Isomorphic**: Same generated code works in Go (backend) and WASM (frontend)
+- **Three Layers**: DB persistence, JSON transport, and Form UI — from one struct definition
+- **Code Generator**: `ormc` CLI generates boilerplate from struct tags
 
 ## Installation
 
@@ -18,31 +17,57 @@ go get github.com/tinywasm/orm
 go install github.com/tinywasm/orm/cmd/ormc@latest
 ```
 
+## Three Layers, One Struct
+
+`ormc` generates code for three layers depending on the directive and tags present:
+
+| Layer | Concern | Controlled by | Generated |
+|-------|---------|---------------|-----------|
+| **DB** | Persistence (tables, queries, CRUD) | `db:` tags | `ModelName()`, `ReadOne*`, `ReadAll*`, `T_`, `FieldDB` |
+| **JSON** | Transport (serialization) | `json:` tags | `OmitEmpty` in schema |
+| **Form** | UI (input widgets, validation) | `input:` tags + directive | `Widget` in schema, `Validate()` |
+
+### Directives
+
+| Directive | DB layer | Form layer | Use case |
+|-----------|----------|------------|----------|
+| *(none)* | Yes | No | DB-only struct (config, logs, metrics) |
+| `// ormc:form` | Yes | Yes | Business entity with UI (user, product) |
+| `// ormc:formonly` | No | Yes | Transport/UI struct without DB (login request, RPC params) |
+
 ## Quick Start
 
-### 1. Define your Model
+### 1. Define your structs
 
 ```go
-// modules/user/model.go
 package user
 
+// ormc:form — DB + Form: full CRUD with UI rendering
 type User struct {
-    ID    string `db:"pk"           json:"id"`
-    Name  string                    `json:"name"`
-    Email string `db:"unique"       json:"email"   form:"email"`
-    Bio   string `form:"textarea"   json:"bio,omitempty"`
+    ID      string
+    Name    string
+    Email   string `db:"unique" input:"email"`
+    Bio     string `json:",omitempty" input:"textarea"`
+    Address Address
+}
+
+// ormc:formonly — Form only: validation + UI, no DB
+type Address struct {
+    Street string
+    City   string
+    Zip    string `input:"number"`
 }
 ```
 
-### 2. Generate the Boilerplate
+`ormc` auto-detects: `ID` as PK, field names as column/JSON names, default `input.Text()` widget for string fields. Only add tags when overriding defaults.
 
-Run `ormc` from your project root:
+### 2. Generate
 
 ```bash
 ormc
 ```
 
-This generates `modules/user/model_orm.go` with the `Model` implementation and typed helpers.
+Generates `model_orm.go` next to each source file.
 
 > [!TIP]
 > `ormc` automatically runs `go get` for required dependencies and `go mod tidy` if a `go.mod` is detected.
@@ -50,11 +75,6 @@ This generates `modules/user/model_orm.go` with the `Model` implementation and t
 ### 3. Use it
 
 ```go
-import (
-    "github.com/tinywasm/orm"
-    "yourproject/modules/user"
-)
-
 func GetActiveUsers(db *orm.DB) ([]*user.User, error) {
     return user.ReadAllUser(
         db.Query(&user.User{}).
@@ -64,27 +84,49 @@ func GetActiveUsers(db *orm.DB) ([]*user.User, error) {
 }
 ```
 
-## API Reference
+## Tags Reference
 
-### Interfaces
+### `db:` — DB layer
 
-- `Compiler`: `Compile(Query, Model) (Plan, error)`
-- `Executor`: `Exec()`, `QueryRow()`, `Query()`, `Close()`
-- `TxExecutor`: Embeds `Executor`, adds `BeginTx()`
-- `TxBoundExecutor`: Embeds `Executor`, adds `Commit()`, `Rollback()`
+| Tag | Effect |
+|-----|--------|
+| `db:"pk"` | Marks field as primary key (auto-detected for `ID` fields) |
+| `db:"unique"` | Unique constraint |
+| `db:"not_null"` | NOT NULL constraint |
+| `db:"autoincrement"` | Auto-increment (numeric fields only) |
+| `db:"ref=table"` | Foreign key to table (default column: `id`) |
+| `db:"ref=table:col"` | Foreign key to specific column |
+| `db:"-"` | Exclude field from schema entirely |
 
-### Model Interface
+DB flags are grouped in `Field.DB *FieldDB` (nil for `formonly` structs). Helpers: `field.IsPK()`, `field.IsUnique()`, `field.IsAutoInc()`.
 
-`Model` lives in `github.com/tinywasm/fmt` and is auto-implemented by `ormc`:
+> **String PKs:** must be set by caller via `github.com/tinywasm/unixid` before `db.Create()`. The ORM does not generate IDs.
 
-```go
-type Model interface {
-    fmt.Fielder           // Schema() []fmt.Field + Pointers() []any
-    ModelName() string
-}
-```
+### `json:` — JSON layer
 
-### Schema Field Types (`fmt.FieldType`)
+| Tag | Effect |
+|-----|--------|
+| `json:",omitempty"` | Sets `OmitEmpty: true` in schema |
+| `json:"-"` | Exclude from JSON (field still in schema for DB/Form) |
+
+### `input:` — Form layer
+
+| Tag | Effect |
+|-----|--------|
+| `input:"email"` | `Widget: input.Email()` |
+| `input:"textarea"` | `Widget: input.Textarea()` |
+| `input:"password"` | `Widget: input.Password()` |
+| `input:"number"` | `Widget: input.Number()` |
+| `input:"required"` | `NotNull: true` |
+| `input:"min=2,max=100"` | `Permitted: fmt.Permitted{Minimum: 2, Maximum: 100}` |
+| `input:"letters,spaces"` | `Permitted: fmt.Permitted{Letters: true, Spaces: true}` |
+| `input:"-"` | No widget (field skipped in form rendering) |
+
+Available widget types: `text`, `email`, `password`, `textarea`, `phone`, `number`, `date`, `hour`, `ip`, `rut`, `address`, `checkbox`, `datalist`, `select`, `radio`, `filepath`, `gender`.
+
+`ormc` generates `Validate(action byte)` calling `fmt.ValidateFields(action, m)`. Validation runs for `'c'` (create), `'u'` (update), and `'d'` (delete, PK only).
+
+## Schema Types
 
 | Go Type | FieldType |
 |---|---|
@@ -93,72 +135,57 @@ type Model interface {
 | `float32`, `float64` | `fmt.FieldFloat` |
 | `bool` | `fmt.FieldBool` |
 | `[]byte` | `fmt.FieldBlob` |
-| struct (embedded) | `fmt.FieldStruct` |
-| `time.Time` | ⚠️ **not allowed** — use `int64` + `tinywasm/time`. Add `db:"-"` to suppress the warning |
+| struct (nested) | `fmt.FieldStruct` |
+| `time.Time` | not allowed — use `int64` + `tinywasm/time` |
 
-### Schema Constraints (`fmt.Field`)
+## API Reference
 
-| Field | db tag | Notes |
-|---|---|---|
-| `PK bool` | `db:"pk"` | Auto-detected via `tinywasm/fmt.IDorPrimaryKey` |
-| `Unique bool` | `db:"unique"` | |
-| `NotNull bool` | `db:"not_null"` | |
-| `AutoInc bool` | `db:"autoincrement"` | Numeric fields only |
-| `OmitEmpty bool` | `json:",omitempty"` | Propagated from `json` tag |
-| `Permitted fmt.Permitted` | `validate:"..."` | Validation rules for characters and bounds |
-| FK reference | `db:"ref=table"` or `db:"ref=table:column"` | Stored in `FieldExt.Ref` + `FieldExt.RefColumn` |
-| Ignore field | `db:"-"` | Silently excluded from `Schema()`, `Pointers()` |
-
-> **String PKs:** must be set by caller via `github.com/tinywasm/unixid` before calling `db.Create()`. The ORM does not generate IDs.
-
-`FieldExt` carries FK metadata used by adapters (e.g., SQLite) for `CREATE TABLE` constraints:
+### DB Operations
 
 ```go
-type FieldExt struct {
-    fmt.Field
-    Ref       string // FK: target table name. Empty = no FK.
-    RefColumn string // FK: target column. Empty = auto-detect PK of Ref table.
-}
+db := orm.New(executor, compiler)
+
+db.Create(&user)
+db.Update(&user, orm.Eq(User_.ID, user.ID))
+db.Delete(&user, orm.Eq(User_.ID, user.ID))
+db.CreateTable(&User{})
+db.DropTable(&User{})
 ```
 
-### DB / QB / Clause
-
-- `DB`: `New(Executor, Compiler)`, `Create`, `Update(m, cond, rest...)`, `Delete(m, cond, rest...)`, `Query`, `Tx`, `Close`, `RawExecutor`, `CreateTable`, `DropTable`, `CreateDatabase`
-- `QB` (Fluent API): `Where("col")`, `Limit(n)`, `Offset(n)`, `OrderBy("col")`, `GroupBy("cols...")`
-- `Clause` (Chainable): `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`, `.In()`
-- `OrderClause` (Chainable): `.Asc()`, `.Desc()`
-- `Plan`: `Mode`, `Query`, `Args`
-
-### Constants
-
-`ActionCreate`, `ActionReadOne`, `ActionUpdate`, `ActionDelete`, `ActionReadAll`, `ActionCreateTable`, `ActionDropTable`, `ActionCreateDatabase`
-
-### `Update` and `Delete` require at least one Condition
-
-Enforced at compile time — the first condition is non-variadic:
+`Update` and `Delete` require at least one condition (compile-time enforced):
 
 ```go
-db.Update(&res, orm.Eq(Reservation_.ID, res.ID))           // ✅
-db.Update(&cfg, orm.Eq(Config_.TenantID, tid), orm.Eq(...)) // ✅
-db.Update(&res)                                             // ❌ compile error
+db.Update(&res, orm.Eq(Reservation_.ID, res.ID))  // one condition
+db.Update(&cfg, orm.Eq(Config_.TenantID, tid),     // multiple conditions
+                orm.Eq(Config_.Key, key))
+db.Update(&res)                                     // compile error
 ```
 
-See `docs/ARQUITECTURE.md` section 3.6.
+### Query Builder
 
-### `validate:` and `json:` tags
+```go
+user.ReadAllUser(
+    db.Query(&user.User{}).
+        Where(user.User_.Email).Like("%@example.com").
+        OrderBy(user.User_.Name).Asc().
+        Limit(10).Offset(20),
+)
+```
 
-| Tag | Generated |
-|---|---|
-| `validate:"required"` | `NotNull: true` |
-| `validate:"email"` | Injects `form.ValidateEmail` in `Validate()` |
-| `validate:"min=2"` | `Permitted: {Minimum: 2}` |
-| `json:"bio,omitempty"` | `OmitEmpty: true` |
+Chainable: `Where(col)` → `.Eq()`, `.Neq()`, `.Gt()`, `.Gte()`, `.Lt()`, `.Lte()`, `.Like()`, `.In()` | `OrderBy(col)` → `.Asc()`, `.Desc()` | `Limit(n)`, `Offset(n)`, `GroupBy(cols...)`
 
-`ormc` generates a `Validate(action byte)` method calling `fmt.ValidateFields(action, m)` plus format validators. Validators only run for `'c'` (create) or `'u'` (update).
+### Interfaces
+
+| Interface | Methods |
+|-----------|---------|
+| `Compiler` | `Compile(Query, Model) (Plan, error)` |
+| `Executor` | `Exec()`, `QueryRow()`, `Query()`, `Close()` |
+| `TxExecutor` | `Executor` + `BeginTx()` |
+| `TxBoundExecutor` | `Executor` + `Commit()`, `Rollback()` |
 
 ## ormc — Code Generation
 
-Run from the **project root**. Scans subdirectories for `model.go` / `models.go` and generates `model_orm.go` next to each:
+Run from the **project root**. Scans subdirectories for `model.go` / `models.go`:
 
 ```
 project/
@@ -167,29 +194,19 @@ project/
     product/models.go  → modules/product/model_orm.go
 ```
 
-Use a single `//go:generate` at the project root:
-
 ```go
 //go:generate ormc
 ```
 
 **Generated per struct:**
 
-- `ModelName() string` *(only if not already declared)*
-- `Schema() []fmt.Field`, `Pointers() []any`, `Validate(action byte) error`
-- `T_` metadata struct with typed column name constants
-- `ReadOneT(qb *orm.QB, model *T) (*T, error)`
-- `ReadAllT(qb *orm.QB) ([]*T, error)`
-
-**`// ormc:formonly` directive** — implements `fmt.Fielder` only (no `ModelName`, `ReadOne*`, `ReadAll*`, `T_`):
-
-```go
-// ormc:formonly
-type LoginRequest struct {
-    Email    string
-    Password string `form:"password"`
-}
-```
+| What | When |
+|------|------|
+| `Schema() []Field`, `Pointers() []any` | Always |
+| `Validate(action byte) error` | When struct has validation rules or is a form |
+| `ModelName() string` | DB structs only (not `formonly`) |
+| `T_` metadata struct | DB structs only |
+| `ReadOneT()`, `ReadAllT()` | DB structs only |
 
 **Programmatic API:**
 

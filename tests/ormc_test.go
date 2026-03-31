@@ -78,6 +78,7 @@ func TestOrmc(t *testing.T) {
 			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, OmitEmpty: true, Widget: input.Email()}",
 			"{Name: \"password\", Type: fmt.FieldText, NotNull: true, Widget: input.Password(), Permitted: fmt.Permitted{Minimum: 8}}",
 			"{Name: \"bio\", Type: fmt.FieldText, OmitEmpty: true, Widget: input.Textarea(), Permitted: fmt.Permitted{Tilde: true, Spaces: true}}",
+			"{Name: \"id\", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}, Widget: input.Text()}",
 			"func (m *UserForm) Validate(action byte) error {",
 			"return fmt.ValidateFields(action, m)",
 			"\"github.com/tinywasm/form/input\"",
@@ -115,10 +116,10 @@ func TestOrmc(t *testing.T) {
 			"func (m *User) ModelName() string {",
 			"return \"user\"",
 			"func (m *User) Schema() []fmt.Field {",
-			"{Name: \"id\", Type: fmt.FieldInt, PK: true}",
+			"{Name: \"id\", Type: fmt.FieldInt, DB: &fmt.FieldDB{PK: true}}",
 			"{Name: \"first_name\", Type: fmt.FieldText, NotNull: true}",
 			"{Name: \"last_name\", Type: fmt.FieldText},",
-			"{Name: \"email\", Type: fmt.FieldText, Unique: true}",
+			"{Name: \"email\", Type: fmt.FieldText, DB: &fmt.FieldDB{Unique: true}}",
 			"{Name: \"score\", Type: fmt.FieldFloat},",
 			"{Name: \"is_active\", Type: fmt.FieldBool},",
 			"{Name: \"avatar\", Type: fmt.FieldBlob},",
@@ -163,7 +164,7 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			"{Name: \"id\", Type: fmt.FieldText, PK: true}",
+			"{Name: \"id\", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}}",
 			"{Name: \"user_id\", Type: fmt.FieldInt},",
 		}
 
@@ -245,7 +246,7 @@ func TestOrmc(t *testing.T) {
 
 		expectedStrings := []string{
 			// int32 → FieldInt
-			`{Name: "idnumeric", Type: fmt.FieldInt, PK: true, NotNull: true}`,
+			`{Name: "idnumeric", Type: fmt.FieldInt, DB: &fmt.FieldDB{PK: true}, NotNull: true}`,
 			// uint64 → FieldInt
 			`{Name: "count_uint", Type: fmt.FieldInt},`,
 			// float32 → FieldFloat
@@ -296,7 +297,7 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			`{Name: "id", Type: fmt.FieldText, PK: true, Widget: input.Text()}`,
+			`{Name: "id", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}, Widget: input.Text()}`,
 			`{Name: "name", Type: fmt.FieldText, Widget: input.Text()}`,
 			`{Name: "email", Type: fmt.FieldText, Widget: input.Email()}`,
 			`{Name: "bio", Type: fmt.FieldText, OmitEmpty: true, Widget: input.Textarea()}`,
@@ -331,6 +332,10 @@ func TestOrmc(t *testing.T) {
 		}
 
 		// Count (*int) should be ABSENT
+		if !strings.Contains(content, `{Name: "id", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}}`) {
+			t.Errorf("Generated file missing expected string for ID:\n%s", content)
+		}
+
 		if strings.Contains(content, "Count") || strings.Contains(content, "count") {
 			t.Errorf("Generated file should NOT contain 'count' field (pointer to primitive):\n%s", content)
 		}

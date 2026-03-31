@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/tinywasm/fmt"
 )
@@ -28,13 +27,13 @@ type FieldInfo struct {
 	GoType     string
 	OmitEmpty  bool
 	// Permitted config — populated from validate:"..." tag
-	Letters bool
-	Tilde   bool
-	Numbers bool
-	Spaces  bool
-	Extra   []rune
-	Minimum int
-	Maximum int
+	Letters           bool
+	Tilde             bool
+	Numbers           bool
+	Spaces            bool
+	Extra             []rune
+	Minimum           int
+	Maximum           int
 	WidgetConstructor string // e.g. "input.Text()"
 }
 
@@ -123,11 +122,11 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 							structFound = true
 							if genDecl.Doc != nil {
 								for _, comment := range genDecl.Doc.List {
-									if strings.Contains(comment.Text, "ormc:formonly") {
+									if fmt.Contains(comment.Text, "ormc:formonly") {
 										isForm = true
 										formOnly = true
 										break
-									} else if strings.Contains(comment.Text, "ormc:form") {
+									} else if fmt.Contains(comment.Text, "ormc:form") {
 										isForm = true
 										break
 									}
@@ -179,11 +178,11 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			tagVal := fmt.Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
 			parts := fmt.Convert(tagVal).Split(" ")
 			for _, p := range parts {
-				if strings.HasPrefix(p, "db:\"") {
+				if fmt.HasPrefix(p, "db:\"") {
 					dbTag = fmt.Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
-				} else if strings.HasPrefix(p, "json:\"") {
+				} else if fmt.HasPrefix(p, "json:\"") {
 					jsonTag = fmt.Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
-				} else if strings.HasPrefix(p, "input:\"") {
+				} else if fmt.HasPrefix(p, "input:\"") {
 					inputTag = fmt.Convert(p).TrimPrefix(`input:"`).TrimSuffix(`"`).String()
 				}
 			}
@@ -245,7 +244,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			fieldType = fmt.FieldBlob
 		default:
 			// If it's a struct (but not time.Time, not slice, not chan), map to FieldStruct
-			if typeStr != "" && !strings.Contains(typeStr, "[") && !strings.Contains(typeStr, "chan ") {
+			if typeStr != "" && !fmt.Contains(typeStr, "[") && !fmt.Contains(typeStr, "chan ") {
 				fieldType = fmt.FieldStruct
 			} else {
 				o.log(fmt.Sprintf("Warning: unsupported type %s for field %s.%s; skipping. Add db:\"-\" to suppress.", typeStr, structName, fieldName))
@@ -290,7 +289,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 						return StructInfo{}, fmt.Err("autoincrement not allowed on FieldText")
 					}
 					autoInc = true
-				case strings.HasPrefix(p, "ref="):
+				case fmt.HasPrefix(p, "ref="):
 					refVal := fmt.Convert(p).TrimPrefix("ref=").String()
 					refParts := fmt.Convert(refVal).Split(":")
 					ref = refParts[0]
@@ -330,7 +329,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			if inputTag == "-" {
 				// No widget
 			} else if inputTag != "" {
-				typeName := strings.Split(inputTag, ",")[0]
+				typeName := fmt.Convert(inputTag).Split(",")[0]
 				if !isModifier(typeName) {
 					if ctor, ok := inputWidgets[typeName]; ok {
 						fi.WidgetConstructor = ctor
@@ -397,11 +396,11 @@ var inputWidgets = map[string]string{
 
 func isModifier(s string) bool {
 	return s == "required" || s == "letters" || s == "numbers" || s == "tilde" ||
-		s == "spaces" || s == "name" || strings.HasPrefix(s, "min=") || strings.HasPrefix(s, "max=")
+		s == "spaces" || s == "name" || fmt.HasPrefix(s, "min=") || fmt.HasPrefix(s, "max=")
 }
 
 func parseInputModifiers(tag string, fi *FieldInfo) {
-	parts := strings.Split(tag, ",")
+	parts := fmt.Convert(tag).Split(",")
 	for i, v := range parts {
 		if i == 0 && !isModifier(v) {
 			continue // skip type override
@@ -421,10 +420,10 @@ func parseInputModifiers(tag string, fi *FieldInfo) {
 			fi.Tilde = true
 		case v == "spaces":
 			fi.Spaces = true
-		case strings.HasPrefix(v, "min="):
+		case fmt.HasPrefix(v, "min="):
 			n, _ := fmt.Convert(v).TrimPrefix("min=").Int64()
 			fi.Minimum = int(n)
-		case strings.HasPrefix(v, "max="):
+		case fmt.HasPrefix(v, "max="):
 			n, _ := fmt.Convert(v).TrimPrefix("max=").Int64()
 			fi.Maximum = int(n)
 		}
@@ -441,13 +440,6 @@ func (o *Ormc) GenerateForStruct(structName string, goFile string) error {
 		return nil
 	}
 	return o.GenerateForFile([]StructInfo{info}, goFile)
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[0:1]) + s[1:]
 }
 
 func writePermittedFields(buf *fmt.Conv, f FieldInfo) {

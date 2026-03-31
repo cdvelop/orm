@@ -5,7 +5,7 @@ Generated `model_orm.go` files declare schema definitions as package-level varia
 ```go
 // Generated pattern
 var _schemaUser = []fmt.Field{
-    {Name: "id", Type: fmt.FieldText, PK: true},
+    {Name: "id", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}},
     {Name: "name", Type: fmt.FieldText},
 }
 
@@ -19,7 +19,7 @@ An inline return would allocate a new slice on every call:
 ```go
 func (m *User) Schema() []fmt.Field {
     return []fmt.Field{
-        {Name: "id", Type: fmt.FieldText, PK: true},
+        {Name: "id", Type: fmt.FieldText, DB: &fmt.FieldDB{PK: true}},
         {Name: "name", Type: fmt.FieldText},
     }
 }
