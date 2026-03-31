@@ -30,6 +30,9 @@ func TestOrmc(t *testing.T) {
 		expectedStrings := []string{
 			"func (m *LoginForm) Schema() []fmt.Field {",
 			"func (m *LoginForm) Pointers() []any {",
+			"Widget: input.Email()",
+			"Widget: input.Password()",
+			"\"github.com/tinywasm/form/input\"",
 		}
 		for _, expected := range expectedStrings {
 			if !strings.Contains(content, expected) {
@@ -71,14 +74,13 @@ func TestOrmc(t *testing.T) {
 		expectedStrings := []string{
 			"func (m *UserForm) ModelName() string {",
 			"return \"user_form\"",
-			"{Name: \"name\", Type: fmt.FieldText, Permitted: fmt.Permitted{Letters: true, Tilde: true, Spaces: true, Minimum: 2, Maximum: 100}}",
-			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, OmitEmpty: true}",
-			"{Name: \"password\", Type: fmt.FieldText, NotNull: true, Permitted: fmt.Permitted{Minimum: 8}}",
-			"{Name: \"bio\", Type: fmt.FieldText, OmitEmpty: true, Permitted: fmt.Permitted{Tilde: true, Spaces: true}}",
+			"{Name: \"name\", Type: fmt.FieldText, Widget: input.Text(), Permitted: fmt.Permitted{Letters: true, Tilde: true, Spaces: true, Minimum: 2, Maximum: 100}}",
+			"{Name: \"email\", Type: fmt.FieldText, NotNull: true, OmitEmpty: true, Widget: input.Email()}",
+			"{Name: \"password\", Type: fmt.FieldText, NotNull: true, Widget: input.Password(), Permitted: fmt.Permitted{Minimum: 8}}",
+			"{Name: \"bio\", Type: fmt.FieldText, OmitEmpty: true, Widget: input.Textarea(), Permitted: fmt.Permitted{Tilde: true, Spaces: true}}",
 			"func (m *UserForm) Validate(action byte) error {",
-			"if err := fmt.ValidateFields(action, m); err != nil { return err }",
-			"if action == 'c' || action == 'u' {",
-			"if err := form.ValidateEmail(m.Email); err != nil { return err }",
+			"return fmt.ValidateFields(action, m)",
+			"\"github.com/tinywasm/form/input\"",
 		}
 
 		for _, expected := range expectedStrings {
@@ -294,10 +296,10 @@ func TestOrmc(t *testing.T) {
 		content := string(contentBytes)
 
 		expectedStrings := []string{
-			`{Name: "id", Type: fmt.FieldText, PK: true}`,
-			`{Name: "name", Type: fmt.FieldText}`,
-			`{Name: "email", Type: fmt.FieldText}`,
-			`{Name: "bio", Type: fmt.FieldText, OmitEmpty: true}`,
+			`{Name: "id", Type: fmt.FieldText, PK: true, Widget: input.Text()}`,
+			`{Name: "name", Type: fmt.FieldText, Widget: input.Text()}`,
+			`{Name: "email", Type: fmt.FieldText, Widget: input.Email()}`,
+			`{Name: "bio", Type: fmt.FieldText, OmitEmpty: true, Widget: input.Textarea()}`,
 			`{Name: "home_addr", Type: fmt.FieldStruct}`,
 		}
 

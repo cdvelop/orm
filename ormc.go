@@ -35,7 +35,7 @@ type FieldInfo struct {
 	Extra   []rune
 	Minimum int
 	Maximum int
-	Format  string // "email", "phone", etc. (triggers validator call generation)
+	WidgetConstructor string // e.g. "input.Text()"
 }
 
 // SliceFieldInfo records a slice-of-struct field found in a parent struct.
@@ -51,6 +51,7 @@ type StructInfo struct {
 	PackageName       string
 	Fields            []FieldInfo
 	ModelNameDeclared bool
+	IsForm            bool
 	FormOnly          bool
 	SourceFile        string
 	SliceFields       []SliceFieldInfo // populated by ParseStruct; used by ResolveRelations
@@ -109,6 +110,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 	var targetStruct *ast.StructType
 	var structFound bool
+	var isForm bool
 	var formOnly bool
 
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -122,7 +124,11 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 							if genDecl.Doc != nil {
 								for _, comment := range genDecl.Doc.List {
 									if strings.Contains(comment.Text, "ormc:formonly") {
+										isForm = true
 										formOnly = true
+										break
+									} else if strings.Contains(comment.Text, "ormc:form") {
+										isForm = true
 										break
 									}
 								}
@@ -151,6 +157,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 		ModelName:         modelName,
 		PackageName:       node.Name.Name,
 		ModelNameDeclared: declared,
+		IsForm:            isForm,
 		FormOnly:          formOnly,
 	}
 
@@ -167,7 +174,7 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 
 		dbTag := ""
 		jsonTag := ""
-		validateTag := ""
+		inputTag := ""
 		if field.Tag != nil {
 			tagVal := fmt.Convert(field.Tag.Value).TrimPrefix("`").TrimSuffix("`").String()
 			parts := fmt.Convert(tagVal).Split(" ")
@@ -176,8 +183,8 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 					dbTag = fmt.Convert(p).TrimPrefix(`db:"`).TrimSuffix(`"`).String()
 				} else if strings.HasPrefix(p, "json:\"") {
 					jsonTag = fmt.Convert(p).TrimPrefix(`json:"`).TrimSuffix(`"`).String()
-				} else if strings.HasPrefix(p, "validate:\"") {
-					validateTag = fmt.Convert(p).TrimPrefix(`validate:"`).TrimSuffix(`"`).String()
+				} else if strings.HasPrefix(p, "input:\"") {
+					inputTag = fmt.Convert(p).TrimPrefix(`input:"`).TrimSuffix(`"`).String()
 				}
 			}
 		}
@@ -319,8 +326,34 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 			OmitEmpty:  omitEmpty,
 		}
 
-		if validateTag != "" {
-			parseValidateTag(validateTag, &fi)
+		if isForm {
+			if inputTag == "-" {
+				// No widget
+			} else if inputTag != "" {
+				typeName := strings.Split(inputTag, ",")[0]
+				if !isModifier(typeName) {
+					if ctor, ok := inputWidgets[typeName]; ok {
+						fi.WidgetConstructor = ctor
+					} else {
+						o.log("Warning: unknown input type", typeName, "for field", fi.Name)
+						if ctor, ok := defaultWidgets[fi.GoType]; ok {
+							fi.WidgetConstructor = ctor
+						}
+					}
+				} else {
+					if ctor, ok := defaultWidgets[fi.GoType]; ok {
+						fi.WidgetConstructor = ctor
+					}
+				}
+				parseInputModifiers(inputTag, &fi)
+			} else {
+				if ctor, ok := defaultWidgets[fi.GoType]; ok {
+					fi.WidgetConstructor = ctor
+				}
+			}
+		} else if inputTag != "" && inputTag != "-" {
+			// Struct without form directive, but with input: tag for modifiers
+			parseInputModifiers(inputTag, &fi)
 		}
 
 		info.Fields = append(info.Fields, fi)
@@ -329,23 +362,53 @@ func (o *Ormc) ParseStruct(structName string, goFile string) (StructInfo, error)
 	return info, nil
 }
 
-// parseValidateTag maps validate:"..." rules to FieldInfo Permitted fields.
-func parseValidateTag(tag string, fi *FieldInfo) {
-	parts := fmt.Convert(tag).Split(",")
-	for _, v := range parts {
+var defaultWidgets = map[string]string{
+	"string":  "input.Text()",
+	"int":     "input.Number()",
+	"int32":   "input.Number()",
+	"int64":   "input.Number()",
+	"uint":    "input.Number()",
+	"uint32":  "input.Number()",
+	"uint64":  "input.Number()",
+	"float32": "input.Number()",
+	"float64": "input.Number()",
+	"bool":    "input.Checkbox()",
+}
+
+var inputWidgets = map[string]string{
+	"text":     "input.Text()",
+	"email":    "input.Email()",
+	"password": "input.Password()",
+	"textarea": "input.Textarea()",
+	"phone":    "input.Phone()",
+	"number":   "input.Number()",
+	"date":     "input.Date()",
+	"hour":     "input.Hour()",
+	"ip":       "input.IP()",
+	"rut":      "input.Rut()",
+	"address":  "input.Address()",
+	"checkbox": "input.Checkbox()",
+	"datalist": "input.Datalist()",
+	"select":   "input.Select()",
+	"radio":    "input.Radio()",
+	"filepath": "input.Filepath()",
+	"gender":   "input.Gender()",
+}
+
+func isModifier(s string) bool {
+	return s == "required" || s == "letters" || s == "numbers" || s == "tilde" ||
+		s == "spaces" || s == "name" || strings.HasPrefix(s, "min=") || strings.HasPrefix(s, "max=")
+}
+
+func parseInputModifiers(tag string, fi *FieldInfo) {
+	parts := strings.Split(tag, ",")
+	for i, v := range parts {
+		if i == 0 && !isModifier(v) {
+			continue // skip type override
+		}
 		switch {
 		case v == "required":
 			fi.NotNull = true
-		case v == "email":
-			fi.Format = "email"
-		case v == "phone":
-			fi.Format = "phone"
-		case v == "ip":
-			fi.Format = "ip"
-		case v == "rut":
-			fi.Format = "rut"
-		case v == "date":
-			fi.Format = "date"
 		case v == "name":
 			fi.Letters = true
 			fi.Tilde = true
@@ -523,7 +586,17 @@ func (o *Ormc) generateAll(all map[string]StructInfo, structOrder []string, file
 
 // Run is the entry point for the CLI tool.
 func (o *Ormc) Run() error {
-	// Pass 1: collect all structs across all model files
+	// Pass 0: cleanup tags
+	_, _, fileOrder, err := o.collectAllStructs()
+	if err == nil {
+		for _, f := range fileOrder {
+			if err := o.RewriteModelTags(f); err != nil {
+				o.log(fmt.Sprintf("Warning: failed to rewrite tags in %s: %v", f, err))
+			}
+		}
+	}
+
+	// Pass 1: collect all structs across all model files (after cleanup)
 	all, structOrder, fileOrder, err := o.collectAllStructs()
 	if err != nil {
 		return fmt.Err(err, "error walking directory")
@@ -543,9 +616,6 @@ func (o *Ormc) Run() error {
 	// Pass 4: sync dependencies
 	if _, err := os.Stat(filepath.Join(o.rootDir, "go.mod")); err == nil {
 		o.log("Syncing dependencies...")
-		if err := o.exec("go", "get", "github.com/tinywasm/fmt", "github.com/tinywasm/orm", "github.com/tinywasm/form"); err != nil {
-			return fmt.Err(err, "failed to get dependencies")
-		}
 		if err := o.exec("go", "mod", "tidy"); err != nil {
 			return fmt.Err(err, "failed to tidy module")
 		}
