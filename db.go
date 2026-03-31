@@ -29,7 +29,7 @@ func (db *DB) Create(m fmt.Model) error {
 	var values []any
 	for i, f := range schema {
 		// Skip autoincrement PK fields with zero value — let the DB assign them.
-		if f.PK && f.AutoInc {
+		if f.IsPK() && f.IsAutoInc() {
 			if v, ok := allValues[i].(int); ok && v == 0 {
 				continue
 			}

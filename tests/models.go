@@ -94,9 +94,9 @@ type MockChild struct {
 type UserForm struct {
 	ID       string `db:"pk"`
 	Name     string `input:"name,min=2,max=100"`
-	Email    string `db:"not_null" input:"email,required" json:"email,omitempty"`
+	Email    string `db:"not_null" input:"email,required" json:",omitempty"`
 	Password string `input:"password,required,min=8"`
-	Bio      string `input:"textarea,tilde,spaces" json:"bio,omitempty"`
+	Bio      string `input:"textarea,tilde,spaces" json:",omitempty"`
 	Age      int64
 }
 
@@ -113,11 +113,11 @@ type Address struct {
 
 // ormc:form
 type UserWithJSON struct {
-	ID       string  `db:"pk"           json:"id"`
-	Name     string  `json:"name"`
-	Email    string  `input:"email"      json:"email"`
-	Bio      string  `input:"textarea"   json:"bio,omitempty"`
-	HomeAddr Address `json:"home_addr"`
+	ID       string  `db:"pk"`
+	Name     string  ``
+	Email    string  `input:"email"`
+	Bio      string  `input:"textarea" json:",omitempty"`
+	HomeAddr Address ``
 }
 
 type WithPointers struct {

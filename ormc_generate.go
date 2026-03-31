@@ -4,6 +4,7 @@ package orm
 
 import (
 	"os"
+	"strings"
 
 	"github.com/tinywasm/fmt"
 )
@@ -69,17 +70,23 @@ func (o *Ormc) GenerateForFile(infos []StructInfo, sourceFile string) error {
 			}
 
 			buf.Write(fmt.Sprintf("\t\t{Name: \"%s\", Type: %s", f.ColumnName, typeStr))
-			if f.PK {
-				buf.Write(", PK: true")
-			}
-			if f.Unique {
-				buf.Write(", Unique: true")
+			if !info.FormOnly && (f.PK || f.Unique || f.AutoInc) {
+				buf.Write(", DB: &fmt.FieldDB{")
+				var parts []string
+				if f.PK {
+					parts = append(parts, "PK: true")
+				}
+				if f.Unique {
+					parts = append(parts, "Unique: true")
+				}
+				if f.AutoInc {
+					parts = append(parts, "AutoInc: true")
+				}
+				buf.Write(strings.Join(parts, ", "))
+				buf.Write("}")
 			}
 			if f.NotNull {
 				buf.Write(", NotNull: true")
-			}
-			if f.AutoInc {
-				buf.Write(", AutoInc: true")
 			}
 			if f.OmitEmpty {
 				buf.Write(", OmitEmpty: true")
